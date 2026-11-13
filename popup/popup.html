@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>PocketBeat</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="top">
+    <form id="search-form" class="search" role="search">
+      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.43 4.44 1.42-1.42-4.44-4.43A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"/></svg>
+      <input id="search-input" type="search" placeholder="Search songs or artists" autocomplete="off" aria-label="Search songs" />
+    </form>
+    <button id="settings-btn" class="icon-btn" type="button" title="Settings" aria-label="Settings" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9v2H4V7Zm13 0h3v2h-3V7Zm-2-2h2v6h-2V5ZM4 15h3v2H4v-2Zm7 0h9v2h-9v-2Zm-2-2h2v6H9v-6Z"/></svg>
+    </button>
+  </header>
+  <p id="status" class="status" role="status"></p>
+
+  <!-- NOW PLAYING -->
+  <section class="player" aria-label="Now playing">
+    <div class="np">
+      <img id="np-art" class="np-art" alt="" hidden />
+      <div id="np-art-empty" class="np-art np-art-empty" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M10 3v10.6A3.5 3.5 0 1 0 12 17V7h6V3h-8Z"/></svg>
+      </div>
+      <div class="np-text">
+        <p id="current-title" class="np-title">Nothing playing</p>
+        <p id="current-artist" class="np-artist">Search for a song to start</p>
+      </div>
+    </div>
+
+    <div class="seek-row">
+      <span id="time-current" class="time">0:00</span>
+      <input id="seek-bar" class="range" type="range" min="0" max="0" step="1" value="0" aria-label="Song position" disabled />
+      <span id="time-total" class="time time-total">0:00</span>
+    </div>
+
+    <div class="controls">
+      <div class="transport">
+        <button id="prev-btn" class="icon-btn" type="button" title="Previous" aria-label="Previous">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6V5Zm3.5 7L19 5v14l-9.5-7Z"/></svg>
+        </button>
+        <button id="play-btn" class="play-btn" type="button" title="Play" aria-label="Play">
+          <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7L8 5Z"/></svg>
+          <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7V5Zm6 0h4v14h-4V5Z"/></svg>
+        </button>
+        <button id="next-btn" class="icon-btn" type="button" title="Next" aria-label="Next">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2V5ZM5 5l9.5 7L5 19V5Z"/></svg>
+        </button>
+      </div>
+      <div class="volume">
+        <button id="mute-btn" class="icon-btn small" type="button" title="Mute" aria-label="Mute">
+          <svg class="i-vol" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4Z"/></svg>
+          <svg class="i-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Zm11.3.3 1.4-1.4L19 10.2l2.3-2.3 1.4 1.4-2.3 2.3 2.3 2.3-1.4 1.4-2.3-2.3-2.3 2.3-1.4-1.4 2.3-2.3-2.3-2.3Z"/></svg>
+        </button>
+        <input id="volume-bar" class="range" type="range" min="0" max="100" step="1" value="100" aria-label="Volume" />
+      </div>
+    </div>
+  </section>
+
+  <!-- TABS -->
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" data-tab="results" id="tab-results" hidden>Results</button>
+    <button class="tab" role="tab" data-tab="queue" id="tab-queue">Queue <span id="queue-count" class="count"></span></button>
+    <button class="tab" role="tab" data-tab="suggest" id="tab-suggest">Up next</button>
+    <button class="tab" role="tab" data-tab="lyrics" id="tab-lyrics">Lyrics</button>
+  </nav>
+
+  <main class="panels">
+    <section class="panel" data-panel="results" role="tabpanel" aria-labelledby="tab-results" hidden>
+      <ul id="search-results" class="list"></ul>
+    </section>
+
+    <section class="panel" data-panel="queue" role="tabpanel" aria-labelledby="tab-queue" hidden>
+      <div class="panel-head">
+        <span class="panel-note">Click a song to play it</span>
+        <button id="clear-queue-btn" class="text-btn" type="button">Clear</button>
+      </div>
+      <ul id="queue-list" class="list"></ul>
+    </section>
+
+    <section class="panel" data-panel="suggest" role="tabpanel" aria-labelledby="tab-suggest" hidden>
+      <div class="panel-head">
+        <span class="panel-note">Plays automatically when the queue ends</span>
+      </div>
+      <ul id="suggest-list" class="list"></ul>
+    </section>
+
+    <section class="panel" data-panel="lyrics" role="tabpanel" aria-labelledby="tab-lyrics" hidden>
+      <div id="lyrics-container" class="lyrics">Play a song to see its lyrics.</div>
+      <p class="attribution">Lyrics from <a href="https://lrclib.net" target="_blank" rel="noopener">LRCLIB</a></p>
+    </section>
+
+    <section class="panel" data-panel="settings" hidden>
+      <h2 class="settings-title">Settings</h2>
+      <form id="api-key-form" class="settings-form">
+        <label for="api-key-input">YouTube Data API v3 key (optional)</label>
+        <div class="settings-row">
+          <input id="api-key-input" class="text-input" type="password" placeholder="Paste your API key" autocomplete="off" />
+          <button class="primary-btn" type="submit">Save</button>
+        </div>
+        <p class="panel-note">Search and suggestions use YouTube Music and need no key. This key is only a fallback for search when YouTube Music fails, and it is stored in this browser only.</p>
+      </form>
+    </section>
+  </main>
+
+  <script src="popup.js"></script>
+</body>
+</html>

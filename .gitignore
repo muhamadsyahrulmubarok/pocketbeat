@@ -1,0 +1,14 @@
+# Dependencies (dev tooling only; the extension itself has none)
+node_modules/
+
+# Build output
+dist/
+*.zip
+*.crx
+*.pem
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

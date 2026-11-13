@@ -1,0 +1,51 @@
+name: Release
+
+# Push a tag like v1.2.3 to build the extension zip and publish a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Check the tag matches manifest.json
+        run: |
+          VERSION=$(node -p "require('./manifest.json').version")
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest version v$VERSION"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - run: npm run package
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          awk -v head="## [$VERSION]" '
+            index($0, head) == 1 { found = 1; next }
+            found && (index($0, "## [") == 1 || index($0, "[") == 1) { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          [ -s release-notes.md ] || echo "Release v$VERSION" > release-notes.md
+
+      - name: Publish the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "dist/pocketbeat-$VERSION.zip" \
+            --title "PocketBeat v$VERSION" \
+            --notes-file release-notes.md

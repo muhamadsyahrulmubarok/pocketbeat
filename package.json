@@ -1,0 +1,26 @@
+{
+  "name": "pocketbeat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Search, play, queue, and sing along to YouTube Music songs right from your toolbar.",
+  "license": "MIT",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/muhamadsyahrulmubarok/pocketbeat.git"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "check": "node scripts/check.mjs",
+    "package": "node scripts/package.mjs",
+    "test": "npm run lint && npm run check"
+  },
+  "engines": {
+    "node": ">=22.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0"
+  }
+}

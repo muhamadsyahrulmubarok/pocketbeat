@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "PocketBeat",
+  "version": "1.0.0",
+  "description": "Search, play, queue, and sing along to YouTube Music songs right from your toolbar, without opening a tab.",
+  "homepage_url": "https://github.com/muhamadsyahrulmubarok/pocketbeat",
+  "minimum_chrome_version": "116",
+  "permissions": ["storage", "offscreen", "declarativeNetRequestWithHostAccess"],
+  "host_permissions": [
+    "https://music.youtube.com/*",
+    "https://www.youtube.com/*",
+    "https://lrclib.net/*",
+    "https://www.googleapis.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "action": {
+    "default_title": "PocketBeat",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
