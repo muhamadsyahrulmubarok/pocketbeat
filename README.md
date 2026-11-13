@@ -4,8 +4,9 @@ Search, play, queue, and sing along to YouTube Music songs right from your brows
 opening a YouTube Music tab and without an API key.
 
 <p>
-  <img src="docs/screenshot-search.png" alt="PocketBeat popup showing song search results" width="300">
-  <img src="docs/screenshot-queue.png" alt="PocketBeat popup showing the play queue" width="300">
+  <img src="docs/screenshot-search.png" alt="PocketBeat popup showing song search results while a song plays" width="250">
+  <img src="docs/screenshot-playlist-search.png" alt="PocketBeat popup showing YouTube Music playlist search results" width="250">
+  <img src="docs/screenshot-playlists.png" alt="PocketBeat popup showing the Playlists tab with saved playlists" width="250">
 </p>
 
 ## Features
