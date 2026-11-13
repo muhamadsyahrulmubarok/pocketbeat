@@ -6,12 +6,34 @@
 const YT_ORIGIN = "https://www.youtube.com";
 
 // YouTube playerState: -1 unstarted, 0 ended, 1 playing, 2 paused, 3 buffering, 5 cued
-const player = { videoId: null, state: -1, time: 0, duration: 0, volume: 100 };
+// blocked: the browser refused to start audio (Firefox, until autoplay is allowed).
+const player = { videoId: null, state: -1, time: 0, duration: 0, volume: 100, blocked: false };
 let iframe = null;
 let ready = false;
 let pending = [];
 let handshakeTimer = null;
 let lastReport = 0;
+
+// Autoplay block detection (Firefox). The embed's onAutoplayBlocked event is
+// not sent when the player runs in the background page, so a song that is
+// still unstarted a few seconds after the player is ready counts as blocked.
+const BLOCK_TIMEOUT = 3000;
+let watchAutoplay = false;
+let blockTimer = null;
+
+function markBlocked() {
+  if (player.blocked) return;
+  player.blocked = true;
+  report(true);
+}
+
+function watchForBlock() {
+  clearTimeout(blockTimer);
+  if (!watchAutoplay) return;
+  blockTimer = setTimeout(() => {
+    if (player.state === -1 || player.state === 5) markBlocked();
+  }, BLOCK_TIMEOUT);
+}
 
 function post(obj) {
   iframe?.contentWindow?.postMessage(JSON.stringify({ ...obj, id: 1, channel: "widget" }), YT_ORIGIN);
@@ -74,11 +96,13 @@ function load(videoId, start = 0, volume) {
   player.time = start;
   player.duration = 0;
   player.state = 3;
+  player.blocked = false;
   if (typeof volume === "number") player.volume = volume;
   report(true);
   if (iframe && ready) {
     // Reuse the iframe: faster than creating a new one.
     command("loadVideoById", [{ videoId, startSeconds: start }]);
+    watchForBlock();
   } else {
     createPlayer(videoId, start);
   }
@@ -89,6 +113,7 @@ function load(videoId, start = 0, volume) {
 function setState(state) {
   if (typeof state !== "number" || state === player.state) return;
   player.state = state;
+  if (state === 1) player.blocked = false;
   report(true);
 }
 
@@ -105,7 +130,13 @@ window.addEventListener("message", (e) => {
     ready = true;
     pending.forEach(([func, args]) => post({ event: "command", func, args }));
     pending = [];
+    // The first autoplay attempt happens before onReady, so a block would go
+    // unnoticed: listen for it, then ask to play again.
+    post({ event: "command", func: "addEventListener", args: ["onAutoplayBlocked"] });
+    post({ event: "command", func: "playVideo", args: [] });
+    watchForBlock();
   }
+  if (data.event === "onAutoplayBlocked") markBlocked();
   if (data.event === "infoDelivery" || data.event === "initialDelivery") {
     const info = data.info || {};
     if (typeof info.currentTime === "number") player.time = info.currentTime;
@@ -129,6 +160,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (sender.id !== chrome.runtime.id || msg.target !== "offscreen") return;
   switch (msg.type) {
     case "LOAD":
+      watchAutoplay = !!msg.watchAutoplay;
       load(msg.videoId, msg.start || 0, msg.volume);
       break;
     case "SET_VOLUME":

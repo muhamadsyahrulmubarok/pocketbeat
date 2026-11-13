@@ -18,6 +18,10 @@
     </button>
   </header>
   <p id="status" class="status" role="status"></p>
+  <div id="autoplay-notice" class="notice" role="alert" hidden>
+    <p>Firefox blocked the music from playing. Allow autoplay for PocketBeat once to fix it.</p>
+    <button id="autoplay-btn" class="primary-btn" type="button">Allow autoplay</button>
+  </div>
 
   <!-- NOW PLAYING -->
   <section class="player" aria-label="Now playing">
@@ -65,21 +69,43 @@
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button class="tab" role="tab" data-tab="results" id="tab-results" hidden>Results</button>
     <button class="tab" role="tab" data-tab="queue" id="tab-queue">Queue <span id="queue-count" class="count"></span></button>
+    <button class="tab" role="tab" data-tab="playlists" id="tab-playlists">Playlists</button>
     <button class="tab" role="tab" data-tab="suggest" id="tab-suggest">Up next</button>
     <button class="tab" role="tab" data-tab="lyrics" id="tab-lyrics">Lyrics</button>
   </nav>
 
   <main class="panels">
     <section class="panel" data-panel="results" role="tabpanel" aria-labelledby="tab-results" hidden>
+      <div class="panel-head">
+        <div class="seg" role="radiogroup" aria-label="Search for">
+          <button class="seg-btn" type="button" role="radio" aria-checked="true" data-kind="songs">Songs</button>
+          <button class="seg-btn" type="button" role="radio" aria-checked="false" data-kind="playlists">Playlists</button>
+        </div>
+      </div>
       <ul id="search-results" class="list"></ul>
     </section>
 
     <section class="panel" data-panel="queue" role="tabpanel" aria-labelledby="tab-queue" hidden>
       <div class="panel-head">
         <span class="panel-note">Click a song to play it</span>
-        <button id="clear-queue-btn" class="text-btn" type="button">Clear</button>
+        <span class="panel-actions">
+          <button id="save-queue-btn" class="text-btn" type="button">Save as playlist</button>
+          <button id="clear-queue-btn" class="text-btn" type="button">Clear</button>
+        </span>
       </div>
+      <form id="save-playlist-form" class="save-form" hidden>
+        <input id="playlist-name" class="text-input" type="text" maxlength="80" placeholder="Playlist name" aria-label="Playlist name" required />
+        <button class="primary-btn" type="submit">Save</button>
+        <button id="save-cancel-btn" class="text-btn" type="button">Cancel</button>
+      </form>
       <ul id="queue-list" class="list"></ul>
+    </section>
+
+    <section class="panel" data-panel="playlists" role="tabpanel" aria-labelledby="tab-playlists" hidden>
+      <div class="panel-head">
+        <span class="panel-note">Saved in this browser. Playing one replaces the queue.</span>
+      </div>
+      <ul id="playlist-list" class="list"></ul>
     </section>
 
     <section class="panel" data-panel="suggest" role="tabpanel" aria-labelledby="tab-suggest" hidden>

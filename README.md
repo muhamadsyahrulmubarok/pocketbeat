@@ -16,6 +16,8 @@ opening a YouTube Music tab and without an API key.
   to put it in the search box and keep typing, Enter to search, Esc to close.
 - **Plays in the background.** Music keeps playing after you close the popup. No tab is opened.
 - **Queue.** Play now, add to queue, remove, clear.
+- **Playlists.** Save your queue as a playlist, or search YouTube Music playlists (Results → Playlists) to
+  play one or save it. Saved playlists stay in your browser.
 - **Up next.** Suggestions come from the YouTube Music radio for the current song. When the queue ends,
   PocketBeat keeps playing from that radio, the same way YouTube Music does.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net), highlighted line by line.
@@ -23,18 +25,36 @@ opening a YouTube Music tab and without an API key.
 
 ## Install
 
-PocketBeat is not on the Chrome Web Store. Install it manually:
+PocketBeat is not on the Chrome Web Store or addons.mozilla.org. Each
+[release](https://github.com/muhamadsyahrulmubarok/pocketbeat/releases/latest) has one package per browser,
+built from the same code.
 
-1. Download `pocketbeat-<version>.zip` from the [latest release](https://github.com/muhamadsyahrulmubarok/pocketbeat/releases/latest)
-   and unzip it. (Or clone this repository.)
+### Chrome, Edge, Brave, Opera (Chromium 116+)
+
+<img src="docs/install-chrome.gif" alt="Installing PocketBeat in Chrome: download and unzip, turn on Developer mode, Load unpacked, select the folder, then search and play" width="720">
+
+1. Download `pocketbeat-<version>.zip` and unzip it. (Or clone this repository.)
 2. Open `chrome://extensions` and turn on **Developer mode** (top right).
 3. Click **Load unpacked** and select the unzipped folder.
 4. Pin PocketBeat to the toolbar, open it, and search for a song.
 
-Works in Chrome 116+ and other Chromium browsers (Edge, Brave, Opera).
-
 To update, replace the folder with the new release and click the reload icon on the extension's card in
 `chrome://extensions`.
+
+### Firefox (140+)
+
+<img src="docs/install-firefox.gif" alt="Installing PocketBeat in Firefox: Load Temporary Add-on in about:debugging, select the Firefox zip, then allow autoplay once from the address bar" width="720">
+
+Firefox only installs add-ons signed by Mozilla, and PocketBeat is not signed yet. Until then you can load it
+for the current session:
+
+1. Download `pocketbeat-<version>-firefox.zip` (don't unzip it).
+2. Open `about:debugging#/runtime/this-firefox` and click **Load Temporary Add-on…**.
+3. Select the zip. PocketBeat stays installed until Firefox restarts.
+
+**First song:** Firefox blocks sound from playing on its own, so the first time PocketBeat shows an
+**Allow autoplay** button. It opens a page that walks you through it: click the autoplay icon in the address
+bar and choose **Allow Audio and Video**. You only do this once per install.
 
 ## How it works
 
@@ -48,7 +68,7 @@ popup ──commands──▶ service worker ──LOAD / TOGGLE / SEEK──▶
 |------|------|------|
 | Popup | `popup/` | The UI. A remote control only: it holds no playback state. |
 | Service worker | `background/service-worker.js` | Search, suggestions, lyrics, the queue, auto-advance. |
-| Offscreen document | `offscreen/` | A hidden page that survives the popup closing. It hosts a YouTube embed iframe, driven through the IFrame API `postMessage` protocol (the `iframe_api` script itself can't be loaded in Manifest V3). |
+| Offscreen document | `offscreen/` | A hidden page that survives the popup closing. It hosts a YouTube embed iframe, driven through the IFrame API `postMessage` protocol (the `iframe_api` script itself can't be loaded in Manifest V3). Firefox has no offscreen API, so there the same page runs in an iframe inside the background page. |
 
 A few details worth knowing:
 
@@ -73,8 +93,10 @@ the free 10,000 daily quota units. The key is stored only in your browser.
 - **Unofficial API.** YouTube Music's internal API is undocumented and can change at any time, which would
   break search and Up next until PocketBeat is updated.
 - **Ads.** Playback goes through the standard YouTube embed, so YouTube may play ads.
-- **Idle player.** Chrome closes the hidden player after about 30 seconds without audio (for example a long
-  pause). Pressing play resumes from where you left off.
+- **Idle player.** The browser closes the hidden player after about 30 seconds without audio (for example a
+  long pause). Pressing play resumes from where you left off.
+- **Firefox** needs autoplay allowed once (see [Install](#firefox-140)), and the package is not signed by
+  Mozilla yet, so it has to be loaded again after each restart.
 - **Lyrics** depend on LRCLIB; not every song has synced lyrics.
 
 ## Privacy
@@ -90,10 +112,15 @@ tooling.
 ```bash
 npm install        # dev tooling (ESLint)
 npm test           # lint + manifest/file checks
-npm run package    # builds dist/pocketbeat-<version>.zip
+npm run package    # builds dist/pocketbeat-<version>.zip and dist/pocketbeat-<version>-firefox.zip
 ```
 
-Load the repository folder with **Load unpacked** while developing. See
+`manifest.json` is the Chromium manifest. The Firefox manifest is generated from it by
+`scripts/package.mjs` (background scripts instead of a service worker, no `offscreen` permission, and the
+add-on id). The JavaScript, HTML, and CSS are the same for both.
+
+In Chromium, load the repository folder with **Load unpacked** while developing. In Firefox, run
+`npm run package` and load the `-firefox.zip` from `about:debugging`. See
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ## Disclaimer

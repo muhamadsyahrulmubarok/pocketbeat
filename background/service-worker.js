@@ -9,7 +9,9 @@ const APP_VERSION = chrome.runtime.getManifest().version;
 //    ("Error 153"), so embed requests get a Referer.
 // 2. The YouTube Music internal API rejects a chrome-extension:// Origin, so
 //    those requests get music.youtube.com as Origin/Referer.
-// Both rules only match requests made by this extension.
+// Both rules only match requests made by this extension. Its host is the
+// extension id in Chrome and a per-install UUID in Firefox.
+const EXTENSION_HOST = location.hostname;
 const EMBED_RULE_ID = 1;
 const YTM_RULE_ID = 2;
 
@@ -23,13 +25,13 @@ async function setupHeaderRules() {
         action: {
           type: "modifyHeaders",
           requestHeaders: [
-            { header: "referer", operation: "set", value: `https://${chrome.runtime.id}.chromiumapp.org/` },
+            { header: "referer", operation: "set", value: `https://${EXTENSION_HOST}.chromiumapp.org/` },
           ],
         },
         condition: {
           urlFilter: "||www.youtube.com/embed/",
           resourceTypes: ["sub_frame"],
-          initiatorDomains: [chrome.runtime.id],
+          initiatorDomains: [EXTENSION_HOST],
         },
       },
       {
@@ -45,7 +47,7 @@ async function setupHeaderRules() {
         condition: {
           urlFilter: "||music.youtube.com/youtubei/",
           resourceTypes: ["xmlhttprequest"],
-          initiatorDomains: [chrome.runtime.id],
+          initiatorDomains: [EXTENSION_HOST],
         },
       },
     ],
@@ -95,17 +97,23 @@ function parseByline(runs = []) {
   return { artist: artists.length ? artists.join(", ") : groups[0] || "", album, duration };
 }
 
+function searchShelfItems(data) {
+  const sections =
+    data?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+  return sections.flatMap((s) => s.musicShelfRenderer?.contents || []);
+}
+
+const flexColumns = (r) => (r.flexColumns || []).map((c) => c.musicResponsiveListItemFlexColumnRenderer?.text?.runs || []);
+
 async function searchYtm(query) {
   const data = await ytmApi("search", { query, params: YTM_SONGS_FILTER });
-  const sections =
-    data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
-  const items = sections.flatMap((s) => s.musicShelfRenderer?.contents || []);
+  const items = searchShelfItems(data);
   const tracks = [];
   for (const item of items) {
     const r = item.musicResponsiveListItemRenderer;
     const videoId = r?.playlistItemData?.videoId;
     if (!videoId) continue;
-    const cols = (r.flexColumns || []).map((c) => c.musicResponsiveListItemFlexColumnRenderer?.text?.runs || []);
+    const cols = flexColumns(r);
     tracks.push({
       videoId,
       title: runsText(cols[0]),
@@ -271,6 +279,115 @@ async function getSuggestions(seed, n = 5) {
   return out;
 }
 
+// ---------- PLAYLISTS ----------
+// YouTube Music playlists can be searched and played, and any list of songs
+// (the queue, or a YouTube Music playlist) can be saved locally under a name.
+const YTM_PLAYLIST_FILTERS = [
+  "EgeKAQQoADgBagwQDhAKEAMQBBAJEAU=", // playlists made by YouTube Music
+  "EgeKAQQoAEABagwQDhAKEAMQBBAJEAU=", // community playlists
+];
+const PLAYLIST_ID = /^[A-Za-z0-9_-]{10,64}$/;
+const MAX_PLAYLISTS = 50;
+const MAX_PLAYLIST_TRACKS = 200;
+
+async function searchPlaylistsYtm(query) {
+  const pages = await Promise.all(
+    YTM_PLAYLIST_FILTERS.map((params) => ytmApi("search", { query, params }).catch(() => null))
+  );
+  const out = [];
+  for (const item of pages.flatMap(searchShelfItems)) {
+    const r = item.musicResponsiveListItemRenderer;
+    const browseId = r?.navigationEndpoint?.browseEndpoint?.browseId || "";
+    const playlistId = browseId.startsWith("VL") ? browseId.slice(2) : "";
+    if (!PLAYLIST_ID.test(playlistId) || out.some((p) => p.playlistId === playlistId)) continue;
+    const cols = flexColumns(r);
+    out.push({
+      playlistId,
+      title: runsText(cols[0]),
+      subtitle: runsText(cols[1]), // "YouTube Music • 116 songs" or "Author • 1M views"
+      thumbnail: bestThumb(r.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails),
+    });
+  }
+  return out.slice(0, 30);
+}
+
+function findKey(obj, key) {
+  if (!obj || typeof obj !== "object") return null;
+  if (obj[key]) return obj[key];
+  for (const v of Object.values(obj)) {
+    const found = findKey(v, key);
+    if (found) return found;
+  }
+  return null;
+}
+
+// The first 100 songs of a YouTube Music playlist.
+async function playlistTracksYtm(playlistId) {
+  if (!PLAYLIST_ID.test(playlistId || "")) throw new Error("Invalid playlist");
+  const data = await ytmApi("browse", { browseId: `VL${playlistId}` });
+  const shelf = findKey(data, "musicPlaylistShelfRenderer");
+  const tracks = [];
+  for (const item of shelf?.contents || []) {
+    const r = item.musicResponsiveListItemRenderer;
+    const videoId = r?.playlistItemData?.videoId;
+    if (!videoId) continue; // unavailable songs
+    const cols = flexColumns(r);
+    const fixed = r.fixedColumns?.[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs;
+    tracks.push({
+      videoId,
+      title: runsText(cols[0]),
+      artist: runsText(cols[1]),
+      album: runsText(cols[2]),
+      duration: parseClock(runsText(fixed)),
+      thumbnail: bestThumb(r.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails),
+    });
+  }
+  return tracks;
+}
+
+// Only the fields a queue item needs (drops flags such as `auto`).
+const pickTrack = (t) => ({
+  videoId: String(t.videoId),
+  title: String(t.title || ""),
+  artist: String(t.artist || ""),
+  album: String(t.album || ""),
+  duration: Number(t.duration) || 0,
+  thumbnail: String(t.thumbnail || ""),
+});
+
+async function getPlaylists() {
+  const { playlists } = await chrome.storage.local.get({ playlists: [] });
+  return playlists;
+}
+
+async function savePlaylist(name, tracks, thumbnail) {
+  if (!tracks.length) throw new Error("There are no songs to save");
+  const playlists = await getPlaylists();
+  if (playlists.length >= MAX_PLAYLISTS) throw new Error(`You can save up to ${MAX_PLAYLISTS} playlists`);
+  const list = tracks.slice(0, MAX_PLAYLIST_TRACKS).map(pickTrack);
+  const playlist = {
+    id: crypto.randomUUID(),
+    name: String(name || "").trim().slice(0, 80) || "My playlist",
+    thumbnail: thumbnail || list[0].thumbnail,
+    tracks: list,
+    created: Date.now(),
+  };
+  await chrome.storage.local.set({ playlists: [playlist, ...playlists] });
+  return playlist;
+}
+
+async function deletePlaylist(id) {
+  const playlists = await getPlaylists();
+  await chrome.storage.local.set({ playlists: playlists.filter((p) => p.id !== id) });
+}
+
+// Replaces the queue with the songs and plays the first one.
+async function playList(tracks) {
+  if (!tracks.length) throw new Error("This playlist has no playable songs");
+  await chrome.storage.local.set({ queue: tracks.slice(0, MAX_PLAYLIST_TRACKS).map(pickTrack) });
+  await playIndex(0);
+}
+
 // ---------- LYRICS (LRCLIB) ----------
 // Fallback results can look like "Artist - Title (Official Video) [HD]".
 function cleanTrack(title, artist) {
@@ -342,25 +459,50 @@ async function broadcastState() {
 }
 
 // ---------- OFFSCREEN PLAYER ----------
+// Chrome hosts the player in an offscreen document. Firefox has no offscreen
+// API, but its background script runs in a real page, so there the same player
+// page is loaded in an iframe inside the background page.
+const PLAYER_URL = "offscreen/offscreen.html";
+const HAS_OFFSCREEN_API = !!chrome.offscreen;
 let creatingOffscreen = null;
 
 async function hasOffscreen() {
+  if (!HAS_OFFSCREEN_API) return !!document.getElementById("player");
   const contexts = await chrome.runtime.getContexts({ contextTypes: ["OFFSCREEN_DOCUMENT"] });
   return contexts.length > 0;
+}
+
+function createPlayerFrame() {
+  return new Promise((resolve) => {
+    const frame = document.createElement("iframe");
+    frame.id = "player";
+    frame.allow = "autoplay; encrypted-media";
+    frame.src = chrome.runtime.getURL(PLAYER_URL);
+    frame.addEventListener("load", () => resolve(), { once: true });
+    document.body.appendChild(frame);
+  });
 }
 
 async function ensureOffscreen() {
   if (await hasOffscreen()) return;
   if (!creatingOffscreen) {
-    creatingOffscreen = chrome.offscreen
-      .createDocument({
-        url: "offscreen/offscreen.html",
-        reasons: ["AUDIO_PLAYBACK"],
-        justification: "Plays music audio without opening a YouTube tab.",
-      })
-      .finally(() => (creatingOffscreen = null));
+    creatingOffscreen = (
+      HAS_OFFSCREEN_API
+        ? chrome.offscreen.createDocument({
+            url: PLAYER_URL,
+            reasons: ["AUDIO_PLAYBACK"],
+            justification: "Plays music audio without opening a YouTube tab.",
+          })
+        : createPlayerFrame()
+    ).finally(() => (creatingOffscreen = null));
   }
   await creatingOffscreen;
+}
+
+async function closeOffscreen() {
+  if (!(await hasOffscreen())) return;
+  if (HAS_OFFSCREEN_API) await chrome.offscreen.closeDocument();
+  else document.getElementById("player").remove();
 }
 
 async function toOffscreen(msg) {
@@ -380,7 +522,8 @@ async function playIndex(index, start = 0) {
   await chrome.storage.local.set({ played: history });
   await setPlayback({ index });
   await ensureOffscreen();
-  await toOffscreen({ type: "LOAD", videoId: track.videoId, start, volume });
+  // Chrome's offscreen document may always play audio; Firefox may block it.
+  await toOffscreen({ type: "LOAD", videoId: track.videoId, start, volume, watchAutoplay: !HAS_OFFSCREEN_API });
 }
 
 // Insert right after the current song, then play it.
@@ -413,7 +556,7 @@ async function removeAt(i) {
 }
 
 async function stopPlayback() {
-  if (await hasOffscreen()) await chrome.offscreen.closeDocument();
+  await closeOffscreen();
   lastStatus = null;
   await chrome.storage.session.set({ lastStatus: null });
   broadcastState();
@@ -473,9 +616,21 @@ async function toggle() {
   await toOffscreen({ type: "TOGGLE" });
 }
 
+// Play, never pause (used after autoplay is allowed in Firefox).
+async function resume() {
+  if (await hasOffscreen()) await toOffscreen({ type: "PLAY" });
+  else await toggle();
+}
+
 async function onPlayerStatus(status) {
   const prevState = lastStatus?.state;
-  lastStatus = { videoId: status.videoId, state: status.state, time: status.time, duration: status.duration };
+  lastStatus = {
+    videoId: status.videoId,
+    state: status.state,
+    time: status.time,
+    duration: status.duration,
+    blocked: !!status.blocked,
+  };
   await chrome.storage.session.set({ lastStatus });
   if (status.state === 0 && prevState !== 0) await next(); // song ended
 }
@@ -510,6 +665,26 @@ const handlers = {
   ENQUEUE: (msg) => enqueue(msg.track).then(() => ({ ok: true })),
   PLAY_INDEX: (msg) => playIndex(msg.index).then(() => ({ ok: true })),
   REMOVE: (msg) => removeAt(msg.index).then(() => ({ ok: true })),
+  SEARCH_PLAYLISTS: (msg) => searchPlaylistsYtm(msg.query).then((results) => ({ ok: true, results })),
+  GET_PLAYLISTS: async () => ({
+    ok: true,
+    playlists: (await getPlaylists()).map((p) => ({ id: p.id, name: p.name, thumbnail: p.thumbnail, count: p.tracks.length })),
+  }),
+  // A saved playlist (id) or a YouTube Music playlist (playlistId).
+  PLAY_PLAYLIST: async (msg) => {
+    const tracks = msg.id
+      ? (await getPlaylists()).find((p) => p.id === msg.id)?.tracks || []
+      : await playlistTracksYtm(msg.playlistId);
+    await playList(tracks);
+    return { ok: true, count: tracks.length };
+  },
+  // Saves the queue, or a YouTube Music playlist (playlistId).
+  SAVE_PLAYLIST: async (msg) => {
+    const tracks = msg.playlistId ? await playlistTracksYtm(msg.playlistId) : (await getPlayback()).queue;
+    const p = await savePlaylist(msg.name, tracks, msg.thumbnail);
+    return { ok: true, name: p.name, count: p.tracks.length };
+  },
+  DELETE_PLAYLIST: (msg) => deletePlaylist(msg.id).then(() => ({ ok: true })),
   CLEAR_QUEUE: async () => {
     await stopPlayback();
     await setPlayback({ queue: [], index: -1 });
@@ -517,6 +692,7 @@ const handlers = {
   },
   CONTROL: async (msg) => {
     if (msg.action === "play") await toggle();
+    if (msg.action === "resume") await resume();
     if (msg.action === "next") await next();
     if (msg.action === "prev") await prev();
     if (msg.action === "seek") await seek(Number(msg.time) || 0);

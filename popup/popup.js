@@ -10,6 +10,9 @@ const ICONS = {
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z"/></svg>',
   // Arrow pointing up-left into the search box: "use this text".
   fill: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h9v2H10.4l8.3 8.3-1.4 1.4L9 10.4V16H7V7Z"/></svg>',
+  // List with a plus: "save as playlist".
+  save: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h12v2H3V6Zm0 4h12v2H3v-2Zm0 4h8v2H3v-2Zm14-1h2v3h3v2h-3v3h-2v-3h-3v-2h3v-3Z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6l1 2h4v2H4V5h4l1-2Zm-3 6h12l-1 12H7L6 9Zm4 2v8h1.5v-8H10Zm2.5 0v8H14v-8h-1.5Z"/></svg>',
 };
 
 function setStatus(text) {
@@ -80,15 +83,19 @@ let lastContentTab = "queue";
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => (lastContentTab = t.dataset.tab)));
 
 // ---------- TRACK LIST ----------
+// track: a song, or { title, sub, thumbnail } for a playlist row.
 function makeRow(track, { onPlay, action, current = false }) {
+  const subText = track.sub ?? (track.album ? `${track.artist} · ${track.album}` : track.artist);
   const li = document.createElement("li");
   li.className = "row" + (current ? " current" : "");
   li.tabIndex = 0;
-  li.title = `${track.title} — ${track.artist}`;
+  li.title = `${track.title} — ${subText}`;
 
   const img = document.createElement("img");
   img.className = "row-art";
-  img.src = artUrl(track, 120);
+  if (track.videoId) img.src = artUrl(track, 120);
+  else if (track.thumbnail) img.src = artUrl({ thumbnail: track.thumbnail }, 120);
+  else img.style.visibility = "hidden";
   img.alt = "";
   img.loading = "lazy";
 
@@ -99,7 +106,7 @@ function makeRow(track, { onPlay, action, current = false }) {
   title.textContent = track.title;
   const sub = document.createElement("p");
   sub.className = "row-sub";
-  sub.textContent = track.album ? `${track.artist} · ${track.album}` : track.artist;
+  sub.textContent = subText;
   if (track.auto) {
     const tag = document.createElement("span");
     tag.className = "row-tag";
@@ -118,7 +125,7 @@ function makeRow(track, { onPlay, action, current = false }) {
     b.innerHTML = ICONS[action.icon];
     b.addEventListener("click", (e) => {
       e.stopPropagation();
-      action.onClick();
+      action.onClick(b);
     });
     li.appendChild(b);
   }
@@ -289,35 +296,151 @@ $("search-input").addEventListener("keydown", (e) => {
 $("search-input").addEventListener("blur", () => setTimeout(closeSuggest, 100));
 
 // ---------- SEARCH ----------
-$("search-form").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  closeSuggest();
-  const query = $("search-input").value.trim();
+// The Results tab searches songs or playlists (Songs / Playlists switch).
+const search = { query: "", kind: "songs", seq: 0 };
+
+function songRow(r) {
+  return makeRow(r, {
+    onPlay: () => sw({ type: "PLAY_TRACK", track: r }),
+    action: { icon: "add", label: "Add to queue", onClick: () => sw({ type: "ENQUEUE", track: r }) },
+  });
+}
+
+function playlistResultRow(p) {
+  return makeRow(
+    { title: p.title, sub: p.subtitle, thumbnail: p.thumbnail },
+    {
+      onPlay: () => playPlaylist({ playlistId: p.playlistId }),
+      action: {
+        icon: "save",
+        label: "Save to Playlists",
+        onClick: async () => {
+          setStatus(`Saving "${p.title}"...`);
+          const res = await sw({ type: "SAVE_PLAYLIST", playlistId: p.playlistId, name: p.title, thumbnail: p.thumbnail });
+          setStatus(res?.ok ? `Saved "${res.name}" to Playlists (${res.count} songs).` : `Couldn't save: ${res?.error}`);
+        },
+      },
+    }
+  );
+}
+
+async function runSearch() {
+  const { query, kind } = search;
   if (!query) return;
+  const seq = ++search.seq;
   const resultsEl = $("search-results");
   $("tab-results").hidden = false;
   lastContentTab = "results";
   showTab("results");
-  resultsEl.replaceChildren(emptyItem(`Searching for "${query}"...`));
+  resultsEl.replaceChildren(emptyItem(`Searching ${kind} for "${query}"...`));
 
-  const res = await sw({ type: "SEARCH", query });
+  const res = await sw({ type: kind === "playlists" ? "SEARCH_PLAYLISTS" : "SEARCH", query });
+  if (seq !== search.seq) return; // a newer search started
   resultsEl.replaceChildren();
   if (!res?.ok) {
     resultsEl.appendChild(emptyItem(`Search failed: ${res?.error || "unknown error"}`));
     return;
   }
   if (!res.results.length) {
-    resultsEl.appendChild(emptyItem(`No results for "${query}". Try different keywords.`));
+    resultsEl.appendChild(emptyItem(`No ${kind} for "${query}". Try different keywords.`));
     return;
   }
-  res.results.forEach((r) => {
-    resultsEl.appendChild(
-      makeRow(r, {
-        onPlay: () => sw({ type: "PLAY_TRACK", track: r }),
-        action: { icon: "add", label: "Add to queue", onClick: () => sw({ type: "ENQUEUE", track: r }) },
-      })
+  res.results.forEach((r) => resultsEl.appendChild(kind === "playlists" ? playlistResultRow(r) : songRow(r)));
+}
+
+$("search-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  closeSuggest();
+  search.query = $("search-input").value.trim();
+  runSearch();
+});
+
+document.querySelectorAll(".seg-btn").forEach((btn) =>
+  btn.addEventListener("click", () => {
+    if (search.kind === btn.dataset.kind) return;
+    search.kind = btn.dataset.kind;
+    document.querySelectorAll(".seg-btn").forEach((b) => b.setAttribute("aria-checked", String(b === btn)));
+    runSearch();
+  })
+);
+
+// ---------- PLAYLISTS ----------
+// Playing a playlist replaces the queue.
+async function playPlaylist(target) {
+  setStatus("Loading playlist...");
+  const res = await sw({ type: "PLAY_PLAYLIST", ...target });
+  if (!res?.ok) setStatus(`Couldn't play the playlist: ${res?.error || "unknown error"}`);
+}
+
+async function renderPlaylists() {
+  const el = $("playlist-list");
+  const res = await sw({ type: "GET_PLAYLISTS" });
+  const playlists = res?.ok ? res.playlists : [];
+  el.replaceChildren();
+  if (!playlists.length) {
+    el.appendChild(
+      emptyItem("No playlists yet. Save your queue from the Queue tab, or search for playlists and save one.")
+    );
+    return;
+  }
+  playlists.forEach((p) => {
+    el.appendChild(
+      makeRow(
+        { title: p.name, sub: `${p.count} ${p.count === 1 ? "song" : "songs"}`, thumbnail: p.thumbnail },
+        {
+          onPlay: () => playPlaylist({ id: p.id }),
+          action: {
+            icon: "trash",
+            label: "Delete playlist",
+            // Two clicks to delete, so a stray click doesn't lose a playlist.
+            onClick: (btn) => {
+              if (btn.classList.contains("confirm")) {
+                sw({ type: "DELETE_PLAYLIST", id: p.id });
+                return;
+              }
+              btn.classList.add("confirm");
+              btn.title = "Click again to delete";
+              btn.setAttribute("aria-label", `Click again to delete ${p.name}`);
+              setTimeout(() => {
+                btn.classList.remove("confirm");
+                btn.title = "Delete playlist";
+                btn.setAttribute("aria-label", "Delete playlist");
+              }, 3000);
+            },
+          },
+        }
+      )
     );
   });
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.playlists) renderPlaylists();
+});
+
+// Save the queue as a playlist (form in the Queue tab).
+$("save-queue-btn").addEventListener("click", () => {
+  const form = $("save-playlist-form");
+  form.hidden = !form.hidden;
+  if (!form.hidden) {
+    const first = state.queue[0];
+    $("playlist-name").value = first ? `${first.artist} and more` : "";
+    $("playlist-name").select();
+    $("playlist-name").focus();
+  }
+});
+
+$("save-cancel-btn").addEventListener("click", () => ($("save-playlist-form").hidden = true));
+
+$("save-playlist-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const res = await sw({ type: "SAVE_PLAYLIST", name: $("playlist-name").value });
+  if (res?.ok) {
+    $("save-playlist-form").hidden = true;
+    setStatus(`Saved "${res.name}" to Playlists (${res.count} songs).`);
+  } else {
+    setStatus(`Couldn't save: ${res?.error || "unknown error"}`);
+  }
 });
 
 // ---------- STATE ----------
@@ -367,13 +490,16 @@ function renderStatus() {
   }
   setRangeFill(bar);
   if (s) highlightLyric(s.time);
+  $("autoplay-notice").hidden = !(hasTrack && s.blocked);
 }
 
 function renderQueue() {
   const el = $("queue-list");
   el.replaceChildren();
   $("clear-queue-btn").hidden = !state.queue.length;
+  $("save-queue-btn").hidden = !state.queue.length;
   if (!state.queue.length) {
+    $("save-playlist-form").hidden = true;
     el.appendChild(emptyItem("Your queue is empty. Search for a song and click + to add it."));
     return;
   }
@@ -411,6 +537,12 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 $("clear-queue-btn").addEventListener("click", () => sw({ type: "CLEAR_QUEUE" }));
+
+// Firefox only: autoplay is allowed from a regular tab (see autoplay.html).
+$("autoplay-btn").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("popup/autoplay.html") });
+  window.close();
+});
 
 // ---------- SEEK & VOLUME ----------
 $("seek-bar").addEventListener("input", (e) => {
@@ -589,4 +721,5 @@ $("api-key-form").addEventListener("submit", async (e) => {
   } else {
     render();
   }
+  renderPlaylists();
 })();

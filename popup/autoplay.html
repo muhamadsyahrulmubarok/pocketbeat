@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Allow autoplay - PocketBeat</title>
+  <link rel="stylesheet" href="autoplay.css" />
+</head>
+<body>
+  <main class="card">
+    <img class="logo" src="../icons/icon48.png" alt="" width="40" height="40" />
+    <h1>Let PocketBeat play music</h1>
+    <p>
+      Firefox stops add-ons and websites from playing sound on their own. PocketBeat plays music from a hidden
+      page, so Firefox needs your OK once.
+    </p>
+
+    <ol class="steps">
+      <li>
+        In the address bar above, click the autoplay icon
+        <svg class="inline-icon" viewBox="0 0 24 24" aria-label="crossed-out play button" role="img"><path d="M3.3 2.3 2 3.6l5 5V19l5.5-3.5 7.9 7.9 1.3-1.3L3.3 2.3ZM9 11l3 3-3 2v-5Zm10.2 1L9 5.5v.3l1.8 1.8L15.6 12l-.9.6 1.4 1.4 3.1-2Z"/></svg>
+        next to <strong>Extension (PocketBeat)</strong>.
+      </li>
+      <li>Next to <strong>Autoplay</strong>, choose <strong>Allow Audio and Video</strong>.</li>
+    </ol>
+
+    <p id="waiting" class="state waiting" role="status">Waiting for permission…</p>
+    <p id="done" class="state done" role="status" hidden>Done. Your music is playing again, and this tab will close.</p>
+    <p id="no-song" class="state" hidden>Start a song in PocketBeat first, then open this page again.</p>
+
+    <!-- Plays briefly to make Firefox show the autoplay icon, then is removed. -->
+    <iframe id="test-player" title="Autoplay test" allow="autoplay; encrypted-media" width="160" height="90"></iframe>
+  </main>
+  <script src="autoplay.js"></script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v1.2.3 to build the extension zip and publish a GitHub release.
+# Push a tag like v1.2.3 to build the Chromium and Firefox zips and publish a GitHub release.
 on:
   push:
     tags: ["v*"]
@@ -46,6 +46,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "dist/pocketbeat-$VERSION.zip" \
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/pocketbeat-$VERSION.zip" "dist/pocketbeat-$VERSION-firefox.zip" \
             --title "PocketBeat v$VERSION" \
             --notes-file release-notes.md

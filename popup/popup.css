@@ -42,13 +42,17 @@ svg { display: block; width: 20px; height: 20px; fill: currentColor; }
 :focus-visible { outline: 2px solid var(--accent-text); outline-offset: 2px; }
 
 /* ---------- Thin scrollbar ----------
-   Don't use scrollbar-width/scrollbar-color: in Chromium those standard
-   properties make the ::-webkit-scrollbar rules below be ignored (arrows return). */
+   Chromium: ::-webkit-scrollbar. The standard scrollbar-width/scrollbar-color
+   make Chromium ignore those rules (arrows return), so they are only applied
+   where ::-webkit-scrollbar is unsupported (Firefox). */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--track); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #55555e; }
 ::-webkit-scrollbar-button { display: none; }
+@supports not selector(::-webkit-scrollbar) {
+  * { scrollbar-width: thin; scrollbar-color: var(--track) transparent; }
+}
 
 /* ---------- Header & search ---------- */
 .top {
@@ -143,6 +147,22 @@ svg { display: block; width: 20px; height: 20px; fill: currentColor; }
   color: #f2b25c;
 }
 .status:empty { display: none; }
+
+.notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.notice[hidden] { display: none; }
+.notice p { margin: 0; flex: 1; }
+.notice .primary-btn { flex: none; height: 30px; padding: 0 10px; font-size: 12px; }
 
 /* ---------- Buttons ---------- */
 .icon-btn {
@@ -286,16 +306,41 @@ svg { display: block; width: 20px; height: 20px; fill: currentColor; }
 .range:disabled { cursor: default; }
 .range:disabled::-webkit-slider-thumb { display: none; }
 
+/* Firefox. Kept in separate rules: one unknown pseudo-element in a selector
+   list would drop the whole rule in the other browser. */
+.range::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--text) var(--pct), var(--track) var(--pct));
+}
+.range::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: none;
+  border-radius: 50%;
+  background: var(--text);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.range:hover::-moz-range-track,
+.range:focus-visible::-moz-range-track {
+  background: linear-gradient(to right, var(--accent) var(--pct), var(--track) var(--pct));
+}
+.range:hover::-moz-range-thumb,
+.range:focus-visible::-moz-range-thumb { opacity: 1; }
+.range:disabled::-moz-range-thumb { display: none; }
+
 /* ---------- Tabs ---------- */
 .tabs {
   display: flex;
-  gap: 4px;
-  padding: 0 12px;
+  gap: 2px;
+  padding: 0 8px;
   border-bottom: 1px solid var(--line);
 }
 .tab {
   position: relative;
-  padding: 10px 8px;
+  padding: 10px 7px;
+  white-space: nowrap;
   border: none;
   background: none;
   color: var(--text-muted);
@@ -307,8 +352,8 @@ svg { display: block; width: 20px; height: 20px; fill: currentColor; }
 .tab[aria-selected="true"]::after {
   content: "";
   position: absolute;
-  left: 8px;
-  right: 8px;
+  left: 7px;
+  right: 7px;
   bottom: -1px;
   height: 2px;
   border-radius: 1px;
@@ -330,6 +375,34 @@ svg { display: block; width: 20px; height: 20px; fill: currentColor; }
   padding: 6px 8px 4px;
 }
 .panel-note { font-size: 12px; color: var(--text-faint); }
+.panel-actions { display: flex; gap: 4px; }
+
+/* Songs / Playlists switch in the Results tab */
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+}
+.seg-btn {
+  padding: 3px 12px;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+.seg-btn:hover { color: var(--text); }
+.seg-btn[aria-checked="true"] { background: var(--surface-hover); color: var(--text); }
+
+/* "Save as playlist" form in the Queue tab */
+.save-form { display: flex; align-items: center; gap: 6px; padding: 4px 8px 8px; }
+.save-form[hidden] { display: none; }
+.save-form .primary-btn { height: 34px; }
+
+/* Delete needs a second click */
+.row .icon-btn.confirm { opacity: 1; color: var(--accent-text); background: var(--surface-hover); }
 
 /* ---------- Track list ---------- */
 .list { list-style: none; margin: 0; padding: 0; }

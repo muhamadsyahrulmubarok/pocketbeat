@@ -6,12 +6,13 @@ Thanks for helping out! Bug reports, ideas, and pull requests are all welcome.
 
 Open an [issue](https://github.com/muhamadsyahrulmubarok/pocketbeat/issues/new/choose) and include:
 
-- your browser and version (for example Chrome 131 on Windows 11)
-- the PocketBeat version (shown on the card in `chrome://extensions`)
+- your browser and version (for example Chrome 131 on Windows 11, or Firefox 140 on macOS)
+- the PocketBeat version (shown on the card in `chrome://extensions`, or in `about:addons` in Firefox)
 - what you did, what you expected, and what happened instead
 - errors from the extension's consoles, if any:
   - popup: right-click the popup → **Inspect** → **Console**
   - service worker and player: `chrome://extensions` → PocketBeat → **Inspect views**
+  - Firefox background and player: `about:debugging#/runtime/this-firefox` → PocketBeat → **Inspect**
 
 If search or Up next suddenly stops working for everyone, YouTube Music's internal API has probably
 changed. Please say so in the issue title.
@@ -22,18 +23,25 @@ changed. Please say so in the issue title.
 2. `npm install` (Node.js 22.2+; this only installs ESLint).
 3. In `chrome://extensions`, turn on **Developer mode** and **Load unpacked** the repository folder.
 4. After changing code, click the reload icon on the PocketBeat card, then reopen the popup.
+5. Firefox: run `npm run package`, then in `about:debugging#/runtime/this-firefox` click
+   **Load Temporary Add-on…** and pick `dist/pocketbeat-<version>-firefox.zip`. Repeat after each change.
 
-There is no build step. The code is plain JavaScript loaded directly by Chrome.
+There is no build step for Chromium: the code is plain JavaScript loaded directly. The Firefox package only
+swaps in a generated manifest (see `scripts/package.mjs`).
 
 ## Project layout
 
 ```
-manifest.json
+manifest.json                  Chromium manifest (the Firefox one is generated from it)
 background/service-worker.js   search, suggestions, lyrics, queue, playback control
 offscreen/offscreen.{html,js}  hidden player hosting the YouTube embed iframe
 popup/popup.{html,css,js}      the popup UI
+popup/autoplay.{html,css,js}   Firefox only: guide for allowing autoplay
 scripts/                       check and packaging tooling (Node)
 ```
+
+Browser differences are kept small and feature-detected (for example `chrome.offscreen` exists only in
+Chromium). Test changes in both Chrome and Firefox when they touch playback.
 
 Messages between the parts carry a `target` field: `"sw"` (service worker), `"offscreen"`, or
 `"broadcast"` (status updates any page may listen to).
@@ -50,7 +58,8 @@ Messages between the parts carry a `target` field: `"sw"` (service worker), `"of
 
 1. Update `version` in both `manifest.json` and `package.json`, and add an entry to `CHANGELOG.md`.
 2. Commit, then tag: `git tag v1.2.3 && git push origin v1.2.3`.
-3. The release workflow builds `pocketbeat-<version>.zip` and attaches it to a GitHub release.
+3. The release workflow builds `pocketbeat-<version>.zip` and `pocketbeat-<version>-firefox.zip` and attaches
+   both to a GitHub release.
 
 ## Code of conduct
 

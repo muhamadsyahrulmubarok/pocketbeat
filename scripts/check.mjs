@@ -25,7 +25,7 @@ const referenced = [
 ].filter(Boolean);
 
 // Scripts and stylesheets referenced from the extension's HTML pages.
-for (const page of ["popup/popup.html", "offscreen/offscreen.html"]) {
+for (const page of ["popup/popup.html", "popup/autoplay.html", "offscreen/offscreen.html"]) {
   const html = read(page);
   for (const [, ref] of html.matchAll(/(?:src|href)="([^"#:]+)"/g)) {
     referenced.push(path.posix.join(path.posix.dirname(page), ref));
