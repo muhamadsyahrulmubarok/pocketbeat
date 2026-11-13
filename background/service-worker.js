@@ -116,6 +116,26 @@ async function searchYtm(query) {
   return tracks;
 }
 
+// Search-as-you-type suggestions ("babym" -> "babymonster", "babymonster choom").
+// Each suggestion keeps YouTube Music's runs so the popup can show which part
+// matched the typed text (bold runs).
+const MAX_QUERY_SUGGESTIONS = 4;
+
+async function suggestQueries(input) {
+  const data = await ytmApi("music/get_search_suggestions", { input });
+  const out = [];
+  for (const section of data.contents || []) {
+    for (const item of section.searchSuggestionsSectionRenderer?.contents || []) {
+      const r = item.searchSuggestionRenderer; // text suggestions only, not artist/song cards
+      if (!r) continue;
+      const runs = (r.suggestion?.runs || []).map((run) => ({ text: run.text, bold: !!run.bold }));
+      const query = r.navigationEndpoint?.searchEndpoint?.query || runsText(runs);
+      if (query && !out.some((s) => s.query === query)) out.push({ query, runs });
+    }
+  }
+  return out.slice(0, MAX_QUERY_SUGGESTIONS);
+}
+
 // The YouTube Music radio ("Up next") for a song.
 async function radioYtm(videoId) {
   const data = await ytmApi("next", { videoId, playlistId: `RDAMVM${videoId}`, isAudioOnly: true });
@@ -463,6 +483,11 @@ async function onPlayerStatus(status) {
 // ---------- MESSAGE ROUTER ----------
 const handlers = {
   SEARCH: (msg) => searchSongs(msg.query).then((results) => ({ ok: true, results })),
+  // Fails soft: no suggestions is better than an error while typing.
+  SUGGEST_QUERIES: (msg) =>
+    suggestQueries(String(msg.input || "").slice(0, 100))
+      .then((items) => ({ ok: true, items }))
+      .catch(() => ({ ok: true, items: [] })),
   LYRICS: (msg) => fetchLyrics(msg.title, msg.artist, msg.duration).then((lyrics) => ({ ok: true, lyrics })),
   GET_STATE: async () => {
     const { queue, index } = await getPlayback();

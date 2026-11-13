@@ -12,6 +12,8 @@ opening a YouTube Music tab and without an API key.
 
 - **Song search from YouTube Music.** Results are song versions with album art, artist, and album,
   not music videos. No API key, no quota.
+- **Search suggestions as you type.** Up to 4 suggestions from YouTube Music. Use ↓/↑ to pick one, →
+  to put it in the search box and keep typing, Enter to search, Esc to close.
 - **Plays in the background.** Music keeps playing after you close the popup. No tab is opened.
 - **Queue.** Play now, add to queue, remove, clear.
 - **Up next.** Suggestions come from the YouTube Music radio for the current song. When the queue ends,

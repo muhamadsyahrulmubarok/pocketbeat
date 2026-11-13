@@ -9,7 +9,9 @@
   <header class="top">
     <form id="search-form" class="search" role="search">
       <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 1 0 4.03 11.6l4.43 4.44 1.42-1.42-4.44-4.43A6.5 6.5 0 0 0 10.5 4Zm0 2a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9Z"/></svg>
-      <input id="search-input" type="search" placeholder="Search songs or artists" autocomplete="off" aria-label="Search songs" />
+      <input id="search-input" type="search" placeholder="Search songs or artists" autocomplete="off" aria-label="Search songs"
+        role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="query-suggest" />
+      <ul id="query-suggest" class="query-suggest" role="listbox" aria-label="Search suggestions" hidden></ul>
     </form>
     <button id="settings-btn" class="icon-btn" type="button" title="Settings" aria-label="Settings" aria-expanded="false">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9v2H4V7Zm13 0h3v2h-3V7Zm-2-2h2v6h-2V5ZM4 15h3v2H4v-2Zm7 0h9v2h-9v-2Zm-2-2h2v6H9v-6Z"/></svg>

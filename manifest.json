@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PocketBeat",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Search, play, queue, and sing along to YouTube Music songs right from your toolbar, without opening a tab.",
   "homepage_url": "https://github.com/muhamadsyahrulmubarok/pocketbeat",
   "minimum_chrome_version": "116",

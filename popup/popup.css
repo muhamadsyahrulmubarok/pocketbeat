@@ -80,6 +80,62 @@ svg { display: block; width: 20px; height: 20px; fill: currentColor; }
 }
 #search-input::placeholder { color: var(--text-faint); }
 #search-input:focus { outline: none; border-color: var(--text-faint); }
+/* Hide the native clear "×" of type=search; it doesn't match the theme. */
+#search-input::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+/* ---------- Search suggestions (autocomplete) ----------
+   The only floating layer in the popup, so it is the only element with a shadow. */
+.query-suggest {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 10;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.qs-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 4px 0 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.qs-item[aria-selected="true"] { background: var(--surface-hover); }
+.qs-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* What the user typed stays quiet; the completion is what they scan for. */
+.qs-typed { color: var(--text-muted); }
+.qs-rest { color: var(--text); font-weight: 600; }
+.qs-fill {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  opacity: 0;
+}
+.qs-fill svg { width: 16px; height: 16px; }
+.qs-item[aria-selected="true"] .qs-fill,
+.qs-item:hover .qs-fill { opacity: 1; }
+.qs-fill:hover { color: var(--text); background: var(--line); }
 
 .status {
   padding: 6px 12px 0;

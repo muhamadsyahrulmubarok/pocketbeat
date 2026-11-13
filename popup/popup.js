@@ -8,6 +8,8 @@ const ICONS = {
   add: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></svg>',
   remove:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z"/></svg>',
+  // Arrow pointing up-left into the search box: "use this text".
+  fill: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h9v2H10.4l8.3 8.3-1.4 1.4L9 10.4V16H7V7Z"/></svg>',
 };
 
 function setStatus(text) {
@@ -138,9 +140,158 @@ function emptyItem(text) {
   return li;
 }
 
+// ---------- SEARCH SUGGESTIONS (autocomplete) ----------
+// Keyboard: ↓/↑ move the highlight, → fills the input with the highlighted
+// suggestion (or the first one), Enter searches it, Esc closes the list.
+const suggest = { items: [], active: -1, timer: null, seq: 0 };
+const SUGGEST_DELAY = 150; // ms of typing pause before asking YouTube Music
+
+function suggestOpen() {
+  return !$("query-suggest").hidden;
+}
+
+function closeSuggest() {
+  clearTimeout(suggest.timer);
+  suggest.seq++; // ignore responses still in flight
+  suggest.items = [];
+  suggest.active = -1;
+  $("query-suggest").hidden = true;
+  $("query-suggest").replaceChildren();
+  const input = $("search-input");
+  input.setAttribute("aria-expanded", "false");
+  input.removeAttribute("aria-activedescendant");
+}
+
+function setActiveSuggestion(index) {
+  suggest.active = index;
+  const input = $("search-input");
+  $("query-suggest")
+    .querySelectorAll(".qs-item")
+    .forEach((li, i) => li.setAttribute("aria-selected", String(i === index)));
+  if (index >= 0) input.setAttribute("aria-activedescendant", `qs-${index}`);
+  else input.removeAttribute("aria-activedescendant");
+}
+
+function renderSuggestions(items) {
+  const list = $("query-suggest");
+  suggest.items = items;
+  suggest.active = -1;
+  list.replaceChildren();
+  if (!items.length) {
+    closeSuggest();
+    return;
+  }
+  items.forEach((item, i) => {
+    const li = document.createElement("li");
+    li.className = "qs-item";
+    li.id = `qs-${i}`;
+    li.setAttribute("role", "option");
+    li.setAttribute("aria-selected", "false");
+
+    const text = document.createElement("span");
+    text.className = "qs-text";
+    // YouTube Music marks the part that matches the typed text as bold.
+    const runs = item.runs?.length ? item.runs : [{ text: item.query, bold: false }];
+    runs.forEach((run) => {
+      const span = document.createElement("span");
+      span.className = run.bold ? "qs-typed" : "qs-rest";
+      span.textContent = run.text;
+      text.appendChild(span);
+    });
+
+    const fill = document.createElement("button");
+    fill.type = "button";
+    fill.className = "qs-fill";
+    fill.tabIndex = -1;
+    fill.title = "Fill search box (→)";
+    fill.setAttribute("aria-label", `Fill search box with ${item.query}`);
+    fill.innerHTML = ICONS.fill;
+
+    li.append(text, fill);
+    // mousedown (not click) so the input keeps focus and doesn't blur-close the list.
+    li.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      if (e.target.closest(".qs-fill")) fillFromSuggestion(i);
+      else searchFor(item.query);
+    });
+    li.addEventListener("mousemove", () => {
+      if (suggest.active !== i) setActiveSuggestion(i);
+    });
+    list.appendChild(li);
+  });
+  list.hidden = false;
+  $("search-input").setAttribute("aria-expanded", "true");
+  setActiveSuggestion(-1); // a fresh list starts with nothing highlighted
+}
+
+async function requestSuggestions(text) {
+  const seq = ++suggest.seq;
+  const res = await sw({ type: "SUGGEST_QUERIES", input: text });
+  // Drop stale answers: the user kept typing or already searched.
+  if (seq !== suggest.seq || $("search-input").value.trim() !== text) return;
+  renderSuggestions(res?.ok ? res.items : []);
+}
+
+function scheduleSuggestions() {
+  clearTimeout(suggest.timer);
+  const text = $("search-input").value.trim();
+  if (!text) {
+    closeSuggest();
+    return;
+  }
+  suggest.timer = setTimeout(() => requestSuggestions(text), SUGGEST_DELAY);
+}
+
+// → : put the suggestion into the input and keep refining from there.
+function fillFromSuggestion(index) {
+  const item = suggest.items[index];
+  if (!item) return;
+  const input = $("search-input");
+  input.value = item.query + " ";
+  input.setSelectionRange(input.value.length, input.value.length);
+  input.focus();
+  scheduleSuggestions();
+}
+
+function searchFor(query) {
+  $("search-input").value = query;
+  closeSuggest();
+  $("search-form").requestSubmit();
+}
+
+$("search-input").addEventListener("input", scheduleSuggestions);
+
+$("search-input").addEventListener("keydown", (e) => {
+  const input = e.currentTarget;
+  const n = suggest.items.length;
+  if (e.key === "ArrowDown" && n) {
+    e.preventDefault();
+    setActiveSuggestion(suggest.active + 1 >= n ? 0 : suggest.active + 1);
+  } else if (e.key === "ArrowUp" && n && suggestOpen()) {
+    e.preventDefault();
+    setActiveSuggestion(suggest.active <= 0 ? n - 1 : suggest.active - 1);
+  } else if (e.key === "ArrowRight" && n && suggestOpen()) {
+    // Only when the caret is at the end, so → still moves the caret mid-text.
+    const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+    if (atEnd) {
+      e.preventDefault();
+      fillFromSuggestion(suggest.active >= 0 ? suggest.active : 0);
+    }
+  } else if (e.key === "Enter" && suggestOpen() && suggest.active >= 0) {
+    e.preventDefault();
+    searchFor(suggest.items[suggest.active].query);
+  } else if (e.key === "Escape" && suggestOpen()) {
+    e.preventDefault(); // close the list, not the whole popup
+    closeSuggest();
+  }
+});
+
+$("search-input").addEventListener("blur", () => setTimeout(closeSuggest, 100));
+
 // ---------- SEARCH ----------
 $("search-form").addEventListener("submit", async (e) => {
   e.preventDefault();
+  closeSuggest();
   const query = $("search-input").value.trim();
   if (!query) return;
   const resultsEl = $("search-results");
