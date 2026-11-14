@@ -116,6 +116,10 @@
     </section>
 
     <section class="panel" data-panel="lyrics" role="tabpanel" aria-labelledby="tab-lyrics" hidden>
+      <div id="lyrics-head" class="panel-head" hidden>
+        <span id="romanize-note" class="panel-note"></span>
+        <button id="romanize-btn" class="seg-btn chip" type="button" aria-pressed="false">Romanized</button>
+      </div>
       <div id="lyrics-container" class="lyrics">Play a song to see its lyrics.</div>
       <p class="attribution">Lyrics from <a href="https://lrclib.net" target="_blank" rel="noopener">LRCLIB</a></p>
     </section>
@@ -133,6 +137,7 @@
     </section>
   </main>
 
+  <script src="romanize.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

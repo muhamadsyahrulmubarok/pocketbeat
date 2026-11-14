@@ -7,7 +7,7 @@ import path from "node:path";
 import zlib from "node:zlib";
 
 const root = path.resolve(import.meta.dirname, "..");
-const INCLUDE = ["LICENSE", "background", "offscreen", "popup", "icons"];
+const INCLUDE = ["LICENSE", "background", "offscreen", "popup", "icons", "data"];
 
 // Firefox add-on id. Permanent once the add-on is signed by Mozilla: don't change it.
 const GECKO_ID = "pocketbeat@muhamadsyahrulmubarok";

@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "check": "node scripts/check.mjs",
     "package": "node scripts/package.mjs",
-    "test": "npm run lint && npm run check"
+    "test": "npm run lint && npm run check && node scripts/test-romanize.mjs"
   },
   "engines": {
     "node": ">=22.2"

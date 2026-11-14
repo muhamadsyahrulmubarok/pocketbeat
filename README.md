@@ -22,6 +22,10 @@ opening a YouTube Music tab and without an API key.
 - **Up next.** Suggestions come from the YouTube Music radio for the current song. When the queue ends,
   PocketBeat keeps playing from that radio, the same way YouTube Music does.
 - **Synced lyrics** from [LRCLIB](https://lrclib.net), highlighted line by line.
+- **Romanized lyrics (optional).** For Korean and Japanese songs, turn on **Romanized** in the Lyrics tab to
+  see each line in Latin letters, so you can sing along. Off by default, and it works offline: Korean is
+  converted by rules, Japanese with a built-in reading dictionary of about 130 KB. Japanese kanji with
+  several readings can occasionally come out wrong.
 - **Seek bar, volume, and mute**, with the volume remembered between songs.
 
 ## Install
@@ -133,3 +137,7 @@ Google. "YouTube" and "YouTube Music" are trademarks of Google LLC. Use PocketBe
 ## License
 
 [MIT](LICENSE) © muhamadsyahrulmubarok. Lyrics are provided by [LRCLIB](https://lrclib.net).
+
+The Japanese reading dictionary, `data/ja-readings.gz`, is derived from the JMdict and KANJIDIC2 files of
+the [Electronic Dictionary Research and Development Group](https://www.edrdg.org/) and is licensed
+[CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). See [data/README.md](data/README.md).

@@ -459,6 +459,21 @@ svg { display: block; width: 20px; height: 20px; fill: currentColor; }
 .lyric-line { transition: color 0.2s; }
 .lyrics.plain .lyric-line { color: var(--text-muted); }
 .lyric-line.active { color: var(--text); font-weight: 600; }
+/* Romanized: the original lyrics stay the main text, the romanization sits
+   under each line, smaller and dimmer. */
+.lyrics.romanized .lyric-line { margin-bottom: 8px; line-height: 1.45; color: var(--text-muted); }
+.lyrics.romanized .lyric-line.active { color: var(--text); }
+.lyric-roman {
+  display: block;
+  margin-top: 1px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--text-faint);
+}
+.lyric-line.active .lyric-roman { color: var(--text-muted); }
+.chip { border: 1px solid var(--line); }
+.chip[aria-pressed="true"] { background: var(--surface-hover); color: var(--text); border-color: var(--text-faint); }
 .attribution { padding: 8px 12px 0; font-size: 11px; color: var(--text-faint); }
 .attribution a { color: var(--text-muted); }
 

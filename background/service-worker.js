@@ -417,6 +417,11 @@ async function lrclibSearch(params) {
   return Array.isArray(data) ? data : [];
 }
 
+// LRCLIB often has several versions of a song (album, live, TV size, sped up).
+// Synced lyrics only line up with the version of the same length, so a synced
+// entry is used only within this many seconds of the song.
+const SYNC_TOLERANCE = 3;
+
 async function fetchLyrics(title, artist, duration) {
   const c = cleanTrack(title, artist);
   let results = await lrclibSearch({ track_name: c.title, artist_name: c.artist });
@@ -424,10 +429,22 @@ async function fetchLyrics(title, artist, duration) {
   if (!results.length) results = await lrclibSearch({ q: c.title });
   if (!results.length) return null;
 
-  // Prefer synced lyrics, then the closest duration.
-  const score = (d) => (d.syncedLyrics ? 0 : 1000) + (duration ? Math.abs((d.duration || 0) - duration) : 0);
-  const best = results.slice().sort((x, y) => score(x) - score(y))[0];
-  return { plain: best.plainLyrics || "", synced: best.syncedLyrics || "" };
+  const synced = results.filter((d) => d.syncedLyrics);
+  let target = duration;
+  if (!target && synced.length) {
+    // Length unknown: assume the version most entries agree on.
+    const counts = new Map();
+    for (const d of synced) counts.set(Math.round(d.duration || 0), (counts.get(Math.round(d.duration || 0)) || 0) + 1);
+    target = [...counts].sort((a, b) => b[1] - a[1])[0][0];
+  }
+  const off = (d) => Math.abs((d.duration || 0) - target);
+  const best = synced.slice().sort((a, b) => off(a) - off(b))[0];
+  if (best && off(best) <= SYNC_TOLERANCE) return { plain: best.plainLyrics || "", synced: best.syncedLyrics };
+
+  // No synced version of this length: plain lyrics, without highlighting
+  // (lines lighting up at the wrong time is worse than no highlighting).
+  const plain = results.filter((d) => d.plainLyrics).sort((a, b) => off(a) - off(b))[0];
+  return plain ? { plain: plain.plainLyrics, synced: "" } : null;
 }
 
 // ---------- STATE (queue + player status) ----------

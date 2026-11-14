@@ -1,3 +1,4 @@
+/* global Romanize */
 // PocketBeat - popup UI
 // The popup is only a remote control: playback runs in the offscreen document,
 // so music keeps playing after the popup closes, with no YouTube Music tab.
@@ -524,6 +525,7 @@ chrome.runtime.onMessage.addListener((msg) => {
   }
   if (msg.type === "PLAYER_STATUS") {
     state.status = msg;
+    statusAt = performance.now();
     renderStatus();
   }
   if (msg.type === "PLAYER_ERROR") {
@@ -552,7 +554,10 @@ $("seek-bar").addEventListener("input", (e) => {
 });
 $("seek-bar").addEventListener("change", async (e) => {
   const time = Number(e.target.value);
-  if (state.status) state.status.time = time;
+  if (state.status) {
+    state.status.time = time;
+    statusAt = performance.now();
+  }
   lastActiveIdx = -1; // force the lyric highlight to recompute
   await sw({ type: "CONTROL", action: "seek", time });
   seeking = false;
@@ -623,6 +628,8 @@ async function maybeLoadSuggestions() {
 
 // ---------- LYRICS ----------
 let lyricsKey = "";
+let lyricsLang = null; // "ja" | "ko" | null, for romanization
+let romanizeOn = false;
 let parsedLyrics = []; // { time, text }
 let lastActiveIdx = -1;
 
@@ -633,6 +640,8 @@ async function maybeLoadLyrics() {
   lyricsKey = key;
   parsedLyrics = [];
   lastActiveIdx = -1;
+  lyricsLang = null;
+  $("lyrics-head").hidden = true;
   const container = $("lyrics-container");
   container.className = "lyrics";
   if (!track) {
@@ -644,7 +653,8 @@ async function maybeLoadLyrics() {
     type: "LYRICS",
     title: track.title,
     artist: track.artist,
-    duration: state.status?.duration || 0,
+    // The song's length from YouTube Music: the player reports 0 until it has loaded.
+    duration: track.duration || state.status?.duration || 0,
   });
   // The song changed while the request was in flight: drop the stale result.
   if (lyricsKey !== key) return;
@@ -659,7 +669,10 @@ function renderLyrics(lyrics) {
   const addLine = (text) => {
     const div = document.createElement("div");
     div.className = "lyric-line";
-    div.textContent = text || " ";
+    const span = document.createElement("span");
+    span.className = "lyric-text";
+    span.textContent = text || " ";
+    div.appendChild(span);
     container.appendChild(div);
   };
 
@@ -679,7 +692,73 @@ function renderLyrics(lyrics) {
   } else {
     container.textContent = "No lyrics found for this song on LRCLIB.";
   }
+  setupRomanization();
 }
+
+// ---------- ROMANIZATION (Korean and Japanese lyrics, optional) ----------
+// Off by default. The choice is remembered; the button only shows for songs
+// with Korean or Japanese lyrics.
+chrome.storage.local.get({ romanize: false }).then(({ romanize }) => {
+  romanizeOn = romanize;
+  $("romanize-btn").setAttribute("aria-pressed", String(romanizeOn));
+  applyRomanization();
+});
+
+function setupRomanization() {
+  const texts = [...document.querySelectorAll("#lyrics-container .lyric-text")].map((el) => el.textContent);
+  lyricsLang = Romanize.detect(texts.join("\n"));
+  $("lyrics-head").hidden = !lyricsLang;
+  $("romanize-note").textContent = lyricsLang === "ja" ? "Japanese lyrics" : lyricsLang === "ko" ? "Korean lyrics" : "";
+  applyRomanization();
+}
+
+async function applyRomanization() {
+  const container = $("lyrics-container");
+  const lines = [...container.querySelectorAll(".lyric-line")];
+  lines.forEach((line) => line.querySelector(".lyric-roman")?.remove());
+  container.classList.remove("romanized");
+  if (!romanizeOn || !lyricsLang) return;
+  const key = lyricsKey;
+  if (lyricsLang === "ja") {
+    try {
+      $("romanize-note").textContent = "Loading Japanese readings...";
+      await Romanize.loadJapanese();
+      $("romanize-note").textContent = "Japanese lyrics";
+    } catch (_) {
+      $("romanize-note").textContent = "Couldn't load Japanese readings";
+      return;
+    }
+    if (key !== lyricsKey || !romanizeOn) return; // song changed or turned off meanwhile
+  }
+  for (const line of lines) {
+    if (line.querySelector(".lyric-roman")) continue;
+    const roman = Romanize.romanize(line.querySelector(".lyric-text").textContent, lyricsLang);
+    if (!roman) continue;
+    const span = document.createElement("span");
+    span.className = "lyric-roman";
+    span.lang = lyricsLang === "ja" ? "ja-Latn" : "ko-Latn";
+    span.textContent = roman;
+    line.appendChild(span);
+  }
+  container.classList.add("romanized");
+}
+
+$("romanize-btn").addEventListener("click", () => {
+  romanizeOn = !romanizeOn;
+  $("romanize-btn").setAttribute("aria-pressed", String(romanizeOn));
+  chrome.storage.local.set({ romanize: romanizeOn });
+  applyRomanization();
+  if (activeTab === "lyrics") requestAnimationFrame(scrollActiveLyric);
+});
+
+// The player reports its position every 500 ms. Between reports the position
+// is estimated, so lines change on time instead of up to half a second late.
+let statusAt = 0;
+setInterval(() => {
+  const s = state.status;
+  if (!s || s.state !== 1 || !parsedLyrics.length || !statusAt) return;
+  highlightLyric(s.time + (performance.now() - statusAt) / 1000);
+}, 100);
 
 function scrollActiveLyric() {
   scrollPanelTo($("lyrics-container").querySelector(".lyric-line.active"), true);

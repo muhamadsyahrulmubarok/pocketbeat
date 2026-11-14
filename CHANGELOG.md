@@ -17,6 +17,17 @@ All notable changes to PocketBeat are listed here. The format follows
   it (two clicks). Stored in the browser, up to 50 playlists of 200 songs.
 - Playlist search: the Results tab has a Songs / Playlists switch. A YouTube Music playlist can be played
   right away or saved to Playlists (first 100 songs).
+- Romanized lyrics for Korean and Japanese songs, behind a **Romanized** toggle in the Lyrics tab (off by
+  default, remembered). Fully offline: Korean uses Revised Romanization with the common sound changes;
+  Japanese uses the browser's word segmenter and a 130 KB reading dictionary built from JMdict and
+  KANJIDIC2 (CC BY-SA 4.0), loaded only when needed.
+
+### Fixed
+
+- Synced lyrics could be out of time for songs that have several versions on LRCLIB (album, live, TV
+  size). The lyrics are now matched to the song's length (within 3 seconds); when no synced version
+  matches, plain lyrics are shown without highlighting.
+- The highlighted lyric line no longer lags up to half a second behind the song.
 
 ## [1.1.0] - 2026-11-13
 

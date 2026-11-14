@@ -13,7 +13,7 @@ Stored with `chrome.storage` in your browser profile, and never sent to the auth
 - the playlists you save (their names and songs)
 - your play history (the last 300 song IDs, used so suggestions don't repeat songs)
 - cached Up next suggestions (kept for 6 hours)
-- your volume setting
+- your volume setting and whether romanized lyrics are on
 - your YouTube Data API key, if you choose to add one
 
 Removing the extension deletes all of it. Clearing the queue in the popup removes the queue, and deleting a
@@ -39,7 +39,7 @@ player.
 
 | Permission | Why |
 |------------|-----|
-| `storage` | Save your queue, playlists, history, volume, and optional API key locally |
+| `storage` | Save your queue, playlists, history, settings, and optional API key locally |
 | `offscreen` | Keep a hidden player page alive so music plays after the popup closes |
 | `declarativeNetRequestWithHostAccess` | Add the request headers YouTube requires for embeds and search, only on requests made by PocketBeat |
 | Host access to `music.youtube.com`, `www.youtube.com`, `lrclib.net`, `www.googleapis.com` | Reach the services listed above. PocketBeat does not read or change the pages you visit. |

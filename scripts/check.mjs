@@ -22,6 +22,8 @@ const referenced = [
   ...Object.values(manifest.icons || {}),
   ...Object.values(manifest.action?.default_icon || {}),
   "offscreen/offscreen.html",
+  "data/ja-readings.gz", // built by scripts/build-ja-dict.mjs
+  "data/README.md",
 ].filter(Boolean);
 
 // Scripts and stylesheets referenced from the extension's HTML pages.
