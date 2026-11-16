@@ -311,6 +311,77 @@ async function searchPlaylistsYtm(query) {
   return out.slice(0, 30);
 }
 
+// Albums, EPs, and singles. Each has an audio playlist (OLAK5uy_...), so an
+// album is played and saved like any YouTube Music playlist.
+const YTM_ALBUMS_FILTER = "EgWKAQIYAWoMEA4QChADEAQQCRAF";
+
+async function searchAlbumsYtm(query) {
+  const data = await ytmApi("search", { query, params: YTM_ALBUMS_FILTER });
+  const out = [];
+  for (const item of searchShelfItems(data)) {
+    const r = item.musicResponsiveListItemRenderer;
+    const play = r?.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
+    const playlistId = play?.watchPlaylistEndpoint?.playlistId || "";
+    if (!PLAYLIST_ID.test(playlistId) || out.some((a) => a.playlistId === playlistId)) continue;
+    const cols = flexColumns(r);
+    out.push({
+      playlistId,
+      title: runsText(cols[0]),
+      subtitle: runsText(cols[1]), // "Album • Artist • 2025", "EP • ...", "Single • ..."
+      thumbnail: bestThumb(r.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails),
+    });
+  }
+  return out.slice(0, 30);
+}
+
+// Artists: playing or saving one uses the artist's "Top songs" playlist.
+const YTM_ARTISTS_FILTER = "EgWKAQIgAWoMEA4QChADEAQQCRAF";
+const ARTIST_ID = /^UC[A-Za-z0-9_-]{20,30}$/;
+
+async function searchArtistsYtm(query) {
+  const data = await ytmApi("search", { query, params: YTM_ARTISTS_FILTER });
+  const out = [];
+  for (const item of searchShelfItems(data)) {
+    const r = item.musicResponsiveListItemRenderer;
+    const artistId = r?.navigationEndpoint?.browseEndpoint?.browseId || "";
+    if (!ARTIST_ID.test(artistId) || out.some((a) => a.artistId === artistId)) continue;
+    const cols = flexColumns(r);
+    out.push({
+      artistId,
+      title: runsText(cols[0]),
+      subtitle: runsText(cols[1]), // "Artist • 95.5M monthly audience"
+      thumbnail: bestThumb(r.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails),
+    });
+  }
+  return out.slice(0, 20);
+}
+
+async function artistTopSongs(artistId) {
+  if (!ARTIST_ID.test(artistId || "")) throw new Error("Invalid artist");
+  const data = await ytmApi("browse", { browseId: artistId });
+  const shelf = findKey(data, "musicShelfRenderer");
+  const all = shelf?.bottomEndpoint?.browseEndpoint?.browseId || "";
+  if (all.startsWith("VL")) return playlistTracksYtm(all.slice(2));
+  // No "See all" playlist: the few songs shown on the artist page.
+  return (shelf?.contents || [])
+    .map((i) => i.musicResponsiveListItemRenderer)
+    .filter((r) => r?.playlistItemData?.videoId)
+    .map((r) => {
+      const cols = flexColumns(r);
+      return {
+        videoId: r.playlistItemData.videoId,
+        title: runsText(cols[0]),
+        artist: runsText(cols[1]),
+        album: runsText(cols[3] || cols[2]),
+        duration: 0,
+        thumbnail: bestThumb(r.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails),
+      };
+    });
+}
+
+// Songs of a YouTube Music playlist/album (playlistId) or an artist (artistId).
+const remoteTracks = (msg) => (msg.artistId ? artistTopSongs(msg.artistId) : playlistTracksYtm(msg.playlistId));
+
 function findKey(obj, key) {
   if (!obj || typeof obj !== "object") return null;
   if (obj[key]) return obj[key];
@@ -337,7 +408,8 @@ async function playlistTracksYtm(playlistId) {
       videoId,
       title: runsText(cols[0]),
       artist: runsText(cols[1]),
-      album: runsText(cols[2]),
+      // An album link; artist "Top songs" playlists show play counts there instead.
+      album: cols.slice(2).flat().find((run) => pageType(run) === "MUSIC_PAGE_TYPE_ALBUM")?.text || "",
       duration: parseClock(runsText(fixed)),
       thumbnail: bestThumb(r.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails),
     });
@@ -381,11 +453,42 @@ async function deletePlaylist(id) {
   await chrome.storage.local.set({ playlists: playlists.filter((p) => p.id !== id) });
 }
 
+// Import from a file made by Export (PocketBeat playlists JSON). Songs are
+// checked one by one; anything that doesn't look like a song is skipped.
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+
+async function importPlaylists(data) {
+  const incoming = Array.isArray(data?.playlists) ? data.playlists : [];
+  const playlists = await getPlaylists();
+  let imported = 0;
+  let skipped = 0;
+  for (const p of incoming) {
+    const tracks = (Array.isArray(p?.tracks) ? p.tracks : []).filter((t) => VIDEO_ID.test(t?.videoId || ""));
+    if (!tracks.length || playlists.length >= MAX_PLAYLISTS) {
+      skipped++;
+      continue;
+    }
+    const list = tracks.slice(0, MAX_PLAYLIST_TRACKS).map(pickTrack);
+    playlists.push({
+      id: crypto.randomUUID(),
+      name: String(p.name || "").trim().slice(0, 80) || "Imported playlist",
+      thumbnail: /^https:\/\//.test(p.thumbnail || "") ? p.thumbnail : list[0].thumbnail,
+      tracks: list,
+      created: Date.now(),
+    });
+    imported++;
+  }
+  await chrome.storage.local.set({ playlists });
+  return { imported, skipped };
+}
+
 // Replaces the queue with the songs and plays the first one.
 async function playList(tracks) {
   if (!tracks.length) throw new Error("This playlist has no playable songs");
-  await chrome.storage.local.set({ queue: tracks.slice(0, MAX_PLAYLIST_TRACKS).map(pickTrack) });
-  await playIndex(0);
+  await chrome.storage.local.set({ queue: tracks.slice(0, MAX_PLAYLIST_TRACKS).map(pickTrack), index: -1 });
+  await chrome.storage.session.set({ shuffleSeen: [], backStack: [] }); // a new queue, a new shuffle round
+  const { shuffle } = await getModes();
+  await playIndex(shuffle ? Math.floor(Math.random() * Math.min(tracks.length, MAX_PLAYLIST_TRACKS)) : 0);
 }
 
 // ---------- LYRICS (LRCLIB) ----------
@@ -469,10 +572,22 @@ async function getLastStatus() {
   return lastStatus;
 }
 
+// Shuffle, repeat ("off" | "all" | "one"), and the sleep timer.
+async function getModes() {
+  const { shuffle, repeat, sleep } = await chrome.storage.local.get({
+    shuffle: false,
+    repeat: "off",
+    sleep: { until: 0, endOfSong: false },
+  });
+  if (sleep.until && sleep.until < Date.now()) sleep.until = 0; // expired while the browser was closed
+  return { shuffle, repeat, sleep };
+}
+
 async function broadcastState() {
   const { queue, index } = await getPlayback();
   const status = await getLastStatus();
-  chrome.runtime.sendMessage({ target: "broadcast", type: "STATE", queue, index, status }).catch(() => {});
+  const modes = await getModes();
+  chrome.runtime.sendMessage({ target: "broadcast", type: "STATE", queue, index, status, modes }).catch(() => {});
 }
 
 // ---------- OFFSCREEN PLAYER ----------
@@ -527,16 +642,31 @@ async function toOffscreen(msg) {
 }
 
 // ---------- PLAYBACK ----------
-async function playIndex(index, start = 0) {
-  const { queue } = await getPlayback();
+const MAX_RECENT = 50; // "Recently played" list in the Playlists tab
+const MAX_BACK = 100; // songs Previous can go back through in shuffle mode
+
+// The toolbar icon's tooltip shows the current song.
+function setActionTitle(track) {
+  chrome.action?.setTitle({ title: track ? `${track.title} · ${track.artist} - PocketBeat` : "PocketBeat" });
+}
+
+async function playIndex(index, start = 0, { back = false } = {}) {
+  const { queue, index: current } = await getPlayback();
   const track = queue[index];
   if (!track) return;
   lastStatus = { videoId: track.videoId, state: 3, time: start, duration: 0 };
-  await chrome.storage.session.set({ lastStatus });
-  // Play history: songs already played are not suggested again.
-  const { played, volume } = await chrome.storage.local.get({ played: [], volume: 100 });
+  // Shuffle bookkeeping: songs heard in this round, and the way back for Previous.
+  const { shuffleSeen, backStack } = await chrome.storage.session.get({ shuffleSeen: [], backStack: [] });
+  if (!back && queue[current] && current !== index) backStack.push(queue[current].videoId);
+  if (!shuffleSeen.includes(track.videoId)) shuffleSeen.push(track.videoId);
+  await chrome.storage.session.set({ lastStatus, shuffleSeen, backStack: backStack.slice(-MAX_BACK) });
+  // Play history: songs already played are not suggested again, and the
+  // "Recently played" list keeps the last songs with their details.
+  const { played, recent, volume } = await chrome.storage.local.get({ played: [], recent: [], volume: 100 });
   const history = [track.videoId, ...played.filter((id) => id !== track.videoId)].slice(0, MAX_HISTORY);
-  await chrome.storage.local.set({ played: history });
+  const recentList = [pickTrack(track), ...recent.filter((t) => t.videoId !== track.videoId)].slice(0, MAX_RECENT);
+  await chrome.storage.local.set({ played: history, recent: recentList });
+  setActionTitle(track);
   await setPlayback({ index });
   await ensureOffscreen();
   // Chrome's offscreen document may always play audio; Firefox may block it.
@@ -559,6 +689,27 @@ async function enqueue(track) {
   if (index < 0) await playIndex(queue.length - 1); // nothing playing yet
 }
 
+// "Play next": right after the current song, without interrupting it.
+async function playNext(track) {
+  const { queue, index } = await getPlayback();
+  if (index < 0) return enqueue(track);
+  queue.splice(index + 1, 0, track);
+  await setPlayback({ queue });
+}
+
+// Drag and drop in the Queue tab. The current song keeps playing.
+async function moveItem(from, to) {
+  const { queue, index } = await getPlayback();
+  if (from === to || from < 0 || to < 0 || from >= queue.length || to >= queue.length) return;
+  const [track] = queue.splice(from, 1);
+  queue.splice(to, 0, track);
+  let newIndex = index;
+  if (from === index) newIndex = to;
+  else if (from < index && to >= index) newIndex = index - 1;
+  else if (from > index && to <= index) newIndex = index + 1;
+  await setPlayback({ queue, index: newIndex });
+}
+
 async function removeAt(i) {
   const { queue, index } = await getPlayback();
   if (i < 0 || i >= queue.length) return;
@@ -576,12 +727,33 @@ async function stopPlayback() {
   await closeOffscreen();
   lastStatus = null;
   await chrome.storage.session.set({ lastStatus: null });
+  setActionTitle(null);
   broadcastState();
 }
 
-async function next() {
+// auto: the song ended by itself (repeat "one" replays it; Next skips).
+async function next({ auto = false } = {}) {
   const { queue, index } = await getPlayback();
-  if (index + 1 < queue.length) return playIndex(index + 1);
+  const { shuffle, repeat } = await getModes();
+  if (auto && repeat === "one" && queue[index]) return playIndex(index);
+
+  if (shuffle && queue.length > 1) {
+    // A random song not heard yet in this round; a new round with repeat "all".
+    let { shuffleSeen } = await chrome.storage.session.get({ shuffleSeen: [] });
+    const unheard = () => queue.map((_, i) => i).filter((i) => i !== index && !shuffleSeen.includes(queue[i].videoId));
+    let pool = unheard();
+    if (!pool.length && repeat === "all") {
+      shuffleSeen = queue[index] ? [queue[index].videoId] : [];
+      await chrome.storage.session.set({ shuffleSeen });
+      pool = unheard();
+    }
+    if (pool.length) return playIndex(pool[Math.floor(Math.random() * pool.length)]);
+  } else if (index + 1 < queue.length) {
+    return playIndex(index + 1);
+  } else if (repeat === "all" && queue.length) {
+    return playIndex(0);
+  }
+
   // End of the queue: append the first suggestion and play it.
   const [suggestion] = await getSuggestions(queue[index], 1);
   if (suggestion) {
@@ -594,14 +766,69 @@ async function next() {
 }
 
 async function prev() {
-  const { index } = await getPlayback();
+  const { queue, index } = await getPlayback();
   const status = await getLastStatus();
-  if ((status?.time || 0) > 3 || index <= 0) {
-    await toOffscreen({ type: "SEEK", time: 0 });
-    return;
+  const restart = () => toOffscreen({ type: "SEEK", time: 0 });
+  if ((status?.time || 0) > 3) return restart();
+  const { shuffle } = await getModes();
+  if (shuffle) {
+    // Back through the songs actually played.
+    const { backStack } = await chrome.storage.session.get({ backStack: [] });
+    while (backStack.length) {
+      const videoId = backStack.pop();
+      const i = queue.findIndex((t) => t.videoId === videoId);
+      if (i >= 0) {
+        await chrome.storage.session.set({ backStack });
+        return playIndex(i, 0, { back: true });
+      }
+    }
+    return restart();
   }
-  return playIndex(index - 1);
+  if (index <= 0) return restart();
+  return playIndex(index - 1, 0, { back: true });
 }
+
+async function pausePlayback() {
+  if (await hasOffscreen()) await toOffscreen({ type: "PAUSE" });
+}
+
+// ---------- SLEEP TIMER ----------
+// Pauses after some minutes (chrome.alarms, which survive the service worker
+// being suspended) or at the end of the current song.
+const SLEEP_ALARM = "sleep";
+let sleepTimeout = null; // fallback where chrome.alarms is missing (Android prototype)
+
+async function setSleep({ minutes = 0, endOfSong = false } = {}) {
+  chrome.alarms?.clear(SLEEP_ALARM);
+  clearTimeout(sleepTimeout);
+  const sleep = { until: 0, endOfSong: !!endOfSong, minutes: 0 };
+  if (!endOfSong && minutes > 0) {
+    sleep.minutes = minutes;
+    sleep.until = Date.now() + minutes * 60000;
+    if (chrome.alarms) chrome.alarms.create(SLEEP_ALARM, { when: sleep.until });
+    else sleepTimeout = setTimeout(onSleep, minutes * 60000);
+  }
+  await chrome.storage.local.set({ sleep });
+  broadcastState();
+}
+
+async function onSleep() {
+  await chrome.storage.local.set({ sleep: { until: 0, endOfSong: false } });
+  await pausePlayback();
+  broadcastState();
+}
+
+chrome.alarms?.onAlarm.addListener((alarm) => {
+  if (alarm.name === SLEEP_ALARM) onSleep();
+});
+
+// ---------- KEYBOARD SHORTCUTS ----------
+// Defaults in manifest.json; changed at chrome://extensions/shortcuts.
+chrome.commands?.onCommand.addListener((command) => {
+  if (command === "toggle-play") toggle();
+  if (command === "next-track") next();
+  if (command === "prev-track") prev();
+});
 
 async function seek(time) {
   if (await hasOffscreen()) {
@@ -649,7 +876,15 @@ async function onPlayerStatus(status) {
     blocked: !!status.blocked,
   };
   await chrome.storage.session.set({ lastStatus });
-  if (status.state === 0 && prevState !== 0) await next(); // song ended
+  if (status.state === 0 && prevState !== 0) {
+    // Song ended: stop here if the sleep timer is set to the end of the song.
+    const { sleep } = await getModes();
+    if (sleep.endOfSong) {
+      await chrome.storage.local.set({ sleep: { until: 0, endOfSong: false } });
+      return broadcastState();
+    }
+    await next({ auto: true });
+  }
 }
 
 // ---------- MESSAGE ROUTER ----------
@@ -671,7 +906,7 @@ const handlers = {
       status = { ...status, state: status.state === 0 ? 0 : 2 }; // player closed = paused
     }
     const { volume } = await chrome.storage.local.get({ volume: 100 });
-    return { ok: true, queue, index, status, volume };
+    return { ok: true, queue, index, status, volume, modes: await getModes() };
   },
   GET_SUGGESTIONS: async () => {
     const { queue, index } = await getPlayback();
@@ -683,28 +918,48 @@ const handlers = {
   PLAY_INDEX: (msg) => playIndex(msg.index).then(() => ({ ok: true })),
   REMOVE: (msg) => removeAt(msg.index).then(() => ({ ok: true })),
   SEARCH_PLAYLISTS: (msg) => searchPlaylistsYtm(msg.query).then((results) => ({ ok: true, results })),
+  SEARCH_ALBUMS: (msg) => searchAlbumsYtm(msg.query).then((results) => ({ ok: true, results })),
   GET_PLAYLISTS: async () => ({
     ok: true,
     playlists: (await getPlaylists()).map((p) => ({ id: p.id, name: p.name, thumbnail: p.thumbnail, count: p.tracks.length })),
   }),
   // A saved playlist (id) or a YouTube Music playlist (playlistId).
   PLAY_PLAYLIST: async (msg) => {
-    const tracks = msg.id
-      ? (await getPlaylists()).find((p) => p.id === msg.id)?.tracks || []
-      : await playlistTracksYtm(msg.playlistId);
+    const tracks = msg.id ? (await getPlaylists()).find((p) => p.id === msg.id)?.tracks || [] : await remoteTracks(msg);
     await playList(tracks);
     return { ok: true, count: tracks.length };
   },
-  // Saves the queue, or a YouTube Music playlist (playlistId).
+  // Saves the queue, a YouTube Music playlist/album (playlistId), or an artist's top songs (artistId).
   SAVE_PLAYLIST: async (msg) => {
-    const tracks = msg.playlistId ? await playlistTracksYtm(msg.playlistId) : (await getPlayback()).queue;
+    const tracks = msg.playlistId || msg.artistId ? await remoteTracks(msg) : (await getPlayback()).queue;
     const p = await savePlaylist(msg.name, tracks, msg.thumbnail);
     return { ok: true, name: p.name, count: p.tracks.length };
   },
   DELETE_PLAYLIST: (msg) => deletePlaylist(msg.id).then(() => ({ ok: true })),
+  EXPORT_PLAYLISTS: async () => ({ ok: true, playlists: await getPlaylists() }),
+  IMPORT_PLAYLISTS: async (msg) => ({ ok: true, ...(await importPlaylists(msg.data)) }),
+  SEARCH_ARTISTS: (msg) => searchArtistsYtm(msg.query).then((results) => ({ ok: true, results })),
+  GET_RECENT: async () => ({ ok: true, items: (await chrome.storage.local.get({ recent: [] })).recent }),
+  PLAY_NEXT: (msg) => playNext(msg.track).then(() => ({ ok: true })),
+  MOVE: (msg) => moveItem(Number(msg.from), Number(msg.to)).then(() => ({ ok: true })),
+  SET_MODES: async (msg) => {
+    const patch = {};
+    if (typeof msg.shuffle === "boolean") {
+      patch.shuffle = msg.shuffle;
+      // Turning shuffle on starts a new round from the current song.
+      const { queue, index } = await getPlayback();
+      await chrome.storage.session.set({ shuffleSeen: queue[index] ? [queue[index].videoId] : [], backStack: [] });
+    }
+    if (["off", "all", "one"].includes(msg.repeat)) patch.repeat = msg.repeat;
+    await chrome.storage.local.set(patch);
+    broadcastState();
+    return { ok: true, modes: await getModes() };
+  },
+  SET_SLEEP: (msg) => setSleep(msg).then(async () => ({ ok: true, modes: await getModes() })),
   CLEAR_QUEUE: async () => {
     await stopPlayback();
     await setPlayback({ queue: [], index: -1 });
+    await chrome.storage.session.set({ shuffleSeen: [], backStack: [] });
     return { ok: true };
   },
   CONTROL: async (msg) => {

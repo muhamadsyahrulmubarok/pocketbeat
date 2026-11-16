@@ -494,3 +494,66 @@ svg { display: block; width: 20px; height: 20px; fill: currentColor; }
   font: inherit;
 }
 .text-input:focus { outline: none; border-color: var(--text-faint); }
+
+/* ---------- v1.3: shuffle, repeat, sleep timer ---------- */
+#volume-bar { width: 64px; }
+.mode-btn[aria-pressed="true"] { color: var(--accent-text); }
+#repeat-btn .i-repeat-one { display: none; }
+#repeat-btn[data-repeat="one"] .i-repeat { display: none; }
+#repeat-btn[data-repeat="one"] .i-repeat-one { display: block; }
+
+.sleep { position: relative; }
+#sleep-btn { position: relative; }
+.badge {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  min-width: 15px;
+  padding: 0 3px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+}
+.badge[hidden] { display: none; }
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 140px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+.menu[hidden] { display: none; }
+.menu button {
+  padding: 7px 10px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.menu button:hover, .menu button:focus-visible { background: var(--surface-hover); color: var(--text); outline: none; }
+.menu button[aria-checked="true"] { color: var(--accent-text); }
+
+/* ---------- v1.3: lists ---------- */
+.section-title { margin: 14px 8px 4px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.row .icon-btn + .icon-btn { margin-left: -6px; }
+.row.dragging { opacity: 0.4; }
+.row.drop-above { box-shadow: inset 0 2px 0 var(--accent-text); }
+.row.drop-below { box-shadow: inset 0 -2px 0 var(--accent-text); }
+
+/* ---------- v1.3: lyrics timing ---------- */
+.lyric-offset { display: flex; align-items: center; gap: 2px; }
+.lyric-offset[hidden] { display: none; }
+#offset-value { min-width: 34px; text-align: center; }

@@ -4,6 +4,30 @@ All notable changes to PocketBeat are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [1.3.0] - 2026-11-16
+
+### Added
+
+- Album and artist search: the Results tab switch is now Songs / Albums / Artists / Playlists. Albums, EPs,
+  and singles show their type, artist, and year; an artist plays (or saves) their top songs. Both can be
+  played right away (replaces the queue) or saved to Playlists.
+- Keyboard shortcuts that work without opening the popup: play/pause (Alt+Shift+Space), next
+  (Alt+Shift+.), and previous (Alt+Shift+,). They can be changed in the browser's extension shortcuts page.
+- Shuffle (every song once before any repeats; Previous goes back through the songs actually played) and
+  repeat (whole queue, or the current song).
+- Sleep timer: pause after 15, 30, or 60 minutes, or at the end of the current song. Uses the new `alarms`
+  permission so it fires even if the browser suspends the extension.
+- The toolbar icon's tooltip shows the current song.
+- Lyrics timing: shift synced lyrics earlier or later in 0.5 s steps, remembered per song.
+- Recently played: the last 50 songs, in the Playlists tab.
+- Play next: song rows have a "Play next" button next to "Add to queue".
+- Reorder the queue by dragging songs, or with Alt+↑/↓ on a focused song.
+- Export saved playlists to a JSON file and import them again (songs are checked on import).
+
+### Fixed
+
+- Songs from an artist's top songs showed the play count where the album name belongs.
+
 ## [1.2.0] - 2026-11-14
 
 ### Added
@@ -50,6 +74,7 @@ First public release.
 - Seek bar, volume, and mute.
 - Optional YouTube Data API v3 key as a search fallback.
 
+[1.3.0]: https://github.com/muhamadsyahrulmubarok/pocketbeat/releases/tag/v1.3.0
 [1.2.0]: https://github.com/muhamadsyahrulmubarok/pocketbeat/releases/tag/v1.2.0
 [1.1.0]: https://github.com/muhamadsyahrulmubarok/pocketbeat/releases/tag/v1.1.0
 [1.0.0]: https://github.com/muhamadsyahrulmubarok/pocketbeat/releases/tag/v1.0.0

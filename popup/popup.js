@@ -7,6 +7,8 @@ const $ = (id) => document.getElementById(id);
 
 const ICONS = {
   add: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"/></svg>',
+  // Arrow into the list: "play next".
+  next: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h12v2H3V6Zm0 4h12v2H3v-2Zm0 4h7v2H3v-2Zm11 0 5 3.5-5 3.5v-7Z"/></svg>',
   remove:
     '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6.4 5 5.6 5.6L17.6 5 19 6.4 13.4 12l5.6 5.6-1.4 1.4-5.6-5.6L6.4 19 5 17.6l5.6-5.6L5 6.4 6.4 5Z"/></svg>',
   // Arrow pointing up-left into the search box: "use this text".
@@ -73,6 +75,7 @@ function showTab(name) {
   $("settings-btn").title = name === "settings" ? "Close settings" : "Settings";
   document.querySelector(".panels").scrollTop = 0;
   if (name === "lyrics") requestAnimationFrame(scrollActiveLyric);
+  if (name === "playlists") renderRecent();
 }
 
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
@@ -85,7 +88,7 @@ document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () 
 
 // ---------- TRACK LIST ----------
 // track: a song, or { title, sub, thumbnail } for a playlist row.
-function makeRow(track, { onPlay, action, current = false }) {
+function makeRow(track, { onPlay, action, actions = action ? [action] : [], current = false }) {
   const subText = track.sub ?? (track.album ? `${track.artist} · ${track.album}` : track.artist);
   const li = document.createElement("li");
   li.className = "row" + (current ? " current" : "");
@@ -117,16 +120,16 @@ function makeRow(track, { onPlay, action, current = false }) {
   text.append(title, sub);
   li.append(img, text);
 
-  if (action) {
+  for (const a of actions) {
     const b = document.createElement("button");
     b.className = "icon-btn";
     b.type = "button";
-    b.title = action.label;
-    b.setAttribute("aria-label", action.label);
-    b.innerHTML = ICONS[action.icon];
+    b.title = a.label;
+    b.setAttribute("aria-label", a.label);
+    b.innerHTML = ICONS[a.icon];
     b.addEventListener("click", (e) => {
       e.stopPropagation();
-      action.onClick(b);
+      a.onClick(b);
     });
     li.appendChild(b);
   }
@@ -297,27 +300,39 @@ $("search-input").addEventListener("keydown", (e) => {
 $("search-input").addEventListener("blur", () => setTimeout(closeSuggest, 100));
 
 // ---------- SEARCH ----------
-// The Results tab searches songs or playlists (Songs / Playlists switch).
+// The Results tab searches songs, albums, artists, or playlists.
+const SEARCH_TYPES = { songs: "SEARCH", albums: "SEARCH_ALBUMS", artists: "SEARCH_ARTISTS", playlists: "SEARCH_PLAYLISTS" };
 const search = { query: "", kind: "songs", seq: 0 };
 
+// Search results, Up next, and Recently played: play now, play next, or add to the queue.
+const songActions = (t) => [
+  {
+    icon: "next",
+    label: "Play next",
+    onClick: () => sw({ type: "PLAY_NEXT", track: t }).then(() => setStatus(`"${t.title}" plays next.`)),
+  },
+  { icon: "add", label: "Add to queue", onClick: () => sw({ type: "ENQUEUE", track: t }) },
+];
+
 function songRow(r) {
-  return makeRow(r, {
-    onPlay: () => sw({ type: "PLAY_TRACK", track: r }),
-    action: { icon: "add", label: "Add to queue", onClick: () => sw({ type: "ENQUEUE", track: r }) },
-  });
+  return makeRow(r, { onPlay: () => sw({ type: "PLAY_TRACK", track: r }), actions: songActions(r) });
 }
 
+// Albums, artists, and playlists: play (replaces the queue) or save to Playlists.
+// An artist plays and saves as their top songs.
 function playlistResultRow(p) {
+  const target = p.artistId ? { artistId: p.artistId } : { playlistId: p.playlistId };
+  const name = p.artistId ? `${p.title}: top songs` : p.title;
   return makeRow(
     { title: p.title, sub: p.subtitle, thumbnail: p.thumbnail },
     {
-      onPlay: () => playPlaylist({ playlistId: p.playlistId }),
+      onPlay: () => playPlaylist(target),
       action: {
         icon: "save",
-        label: "Save to Playlists",
+        label: p.artistId ? "Save top songs to Playlists" : "Save to Playlists",
         onClick: async () => {
-          setStatus(`Saving "${p.title}"...`);
-          const res = await sw({ type: "SAVE_PLAYLIST", playlistId: p.playlistId, name: p.title, thumbnail: p.thumbnail });
+          setStatus(`Saving "${name}"...`);
+          const res = await sw({ type: "SAVE_PLAYLIST", ...target, name, thumbnail: p.thumbnail });
           setStatus(res?.ok ? `Saved "${res.name}" to Playlists (${res.count} songs).` : `Couldn't save: ${res?.error}`);
         },
       },
@@ -335,7 +350,7 @@ async function runSearch() {
   showTab("results");
   resultsEl.replaceChildren(emptyItem(`Searching ${kind} for "${query}"...`));
 
-  const res = await sw({ type: kind === "playlists" ? "SEARCH_PLAYLISTS" : "SEARCH", query });
+  const res = await sw({ type: SEARCH_TYPES[kind], query });
   if (seq !== search.seq) return; // a newer search started
   resultsEl.replaceChildren();
   if (!res?.ok) {
@@ -346,7 +361,8 @@ async function runSearch() {
     resultsEl.appendChild(emptyItem(`No ${kind} for "${query}". Try different keywords.`));
     return;
   }
-  res.results.forEach((r) => resultsEl.appendChild(kind === "playlists" ? playlistResultRow(r) : songRow(r)));
+  // Albums play and save like playlists (each has an audio playlist); artists as their top songs.
+  res.results.forEach((r) => resultsEl.appendChild(kind === "songs" ? songRow(r) : playlistResultRow(r)));
 }
 
 $("search-form").addEventListener("submit", (e) => {
@@ -415,8 +431,73 @@ async function renderPlaylists() {
   });
 }
 
+// Recently played (last 50 songs), under the saved playlists.
+async function renderRecent() {
+  const el = $("recent-list");
+  const res = await sw({ type: "GET_RECENT" });
+  const items = res?.ok ? res.items : [];
+  el.replaceChildren();
+  if (!items.length) {
+    el.appendChild(emptyItem("Songs you play show up here."));
+    return;
+  }
+  items.forEach((t) =>
+    el.appendChild(makeRow(t, { onPlay: () => sw({ type: "PLAY_TRACK", track: t }), actions: songActions(t) }))
+  );
+}
+
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && changes.playlists) renderPlaylists();
+  if (area !== "local") return;
+  if (changes.playlists) renderPlaylists();
+  if (changes.recent && activeTab === "playlists") renderRecent();
+});
+
+// Export / import saved playlists as a JSON file (backup, or move to another browser).
+$("export-btn").addEventListener("click", async () => {
+  const res = await sw({ type: "EXPORT_PLAYLISTS" });
+  const playlists = res?.ok ? res.playlists : [];
+  if (!playlists.length) return setStatus("No playlists to export yet.");
+  const data = {
+    app: "PocketBeat",
+    version: chrome.runtime.getManifest().version,
+    exported: new Date().toISOString(),
+    playlists: playlists.map(({ name, thumbnail, tracks }) => ({ name, thumbnail, tracks })),
+  };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `pocketbeat-playlists-${data.exported.slice(0, 10)}.json`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  setStatus(`Exported ${playlists.length} ${playlists.length === 1 ? "playlist" : "playlists"}.`);
+});
+
+$("import-btn").addEventListener("click", () => {
+  // Firefox closes the popup when the file picker opens, so import from a tab there.
+  if (!chrome.offscreen && !location.search.includes("tab=playlists")) {
+    chrome.tabs.create({ url: chrome.runtime.getURL("popup/popup.html?tab=playlists") });
+    window.close();
+    return;
+  }
+  $("import-file").click();
+});
+
+$("import-file").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch (_) {
+    return setStatus("That file isn't a PocketBeat playlists file.");
+  }
+  const res = await sw({ type: "IMPORT_PLAYLISTS", data });
+  if (!res?.ok) return setStatus(`Couldn't import: ${res?.error || "unknown error"}`);
+  setStatus(
+    `Imported ${res.imported} ${res.imported === 1 ? "playlist" : "playlists"}` +
+      (res.skipped ? ` (${res.skipped} skipped: empty, or over the 50 playlist limit).` : ".")
+  );
 });
 
 // Save the queue as a playlist (form in the Queue tab).
@@ -505,15 +586,59 @@ function renderQueue() {
     return;
   }
   state.queue.forEach((t, i) => {
-    el.appendChild(
-      makeRow(t, {
-        current: i === state.index,
-        onPlay: () => sw({ type: "PLAY_INDEX", index: i }),
-        action: { icon: "remove", label: "Remove from queue", onClick: () => sw({ type: "REMOVE", index: i }) },
-      })
-    );
+    const row = makeRow(t, {
+      current: i === state.index,
+      onPlay: () => sw({ type: "PLAY_INDEX", index: i }),
+      action: { icon: "remove", label: "Remove from queue", onClick: () => sw({ type: "REMOVE", index: i }) },
+    });
+    makeDraggable(row, i);
+    el.appendChild(row);
   });
   if (activeTab === "queue") scrollPanelTo(el.querySelector(".current"), false);
+}
+
+// Reorder the queue: drag a row, or Alt+Up/Down on a focused row.
+let dragFrom = -1;
+let focusAfterMove = -1;
+function makeDraggable(row, i) {
+  row.draggable = true;
+  row.setAttribute("aria-keyshortcuts", "Alt+ArrowUp Alt+ArrowDown");
+  const clear = () => row.classList.remove("drop-above", "drop-below");
+  row.addEventListener("dragstart", (e) => {
+    dragFrom = i;
+    row.classList.add("dragging");
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(i));
+  });
+  row.addEventListener("dragend", () => {
+    row.classList.remove("dragging");
+    dragFrom = -1;
+  });
+  row.addEventListener("dragover", (e) => {
+    if (dragFrom < 0) return;
+    e.preventDefault();
+    const below = e.offsetY > row.offsetHeight / 2;
+    row.classList.toggle("drop-below", below);
+    row.classList.toggle("drop-above", !below);
+  });
+  row.addEventListener("dragleave", clear);
+  row.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const below = row.classList.contains("drop-below");
+    clear();
+    if (dragFrom < 0) return;
+    let to = below ? i + 1 : i;
+    if (dragFrom < to) to--; // the dragged row leaves its old place first
+    if (to !== dragFrom) sw({ type: "MOVE", from: dragFrom, to });
+  });
+  row.addEventListener("keydown", (e) => {
+    if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+    e.preventDefault();
+    const to = e.key === "ArrowUp" ? i - 1 : i + 1;
+    if (to < 0 || to >= state.queue.length) return;
+    focusAfterMove = to;
+    sw({ type: "MOVE", from: i, to });
+  });
 }
 
 chrome.runtime.onMessage.addListener((msg) => {
@@ -522,6 +647,11 @@ chrome.runtime.onMessage.addListener((msg) => {
     state = { queue: msg.queue, index: msg.index, status: msg.status };
     setStatus("");
     render();
+    if (msg.modes) renderModes(msg.modes);
+    if (focusAfterMove >= 0) {
+      $("queue-list").children[focusAfterMove]?.focus();
+      focusAfterMove = -1;
+    }
   }
   if (msg.type === "PLAYER_STATUS") {
     state.status = msg;
@@ -539,6 +669,94 @@ chrome.runtime.onMessage.addListener((msg) => {
 });
 
 $("clear-queue-btn").addEventListener("click", () => sw({ type: "CLEAR_QUEUE" }));
+
+// Shuffle, repeat (off -> all -> one), and the sleep timer.
+let modes = { shuffle: false, repeat: "off", sleep: { until: 0, endOfSong: false } };
+const REPEAT_NEXT = { off: "all", all: "one", one: "off" };
+const REPEAT_LABEL = { off: "Repeat: off", all: "Repeat: all", one: "Repeat: this song" };
+
+function renderModes(m) {
+  modes = m;
+  const shuffle = $("shuffle-btn");
+  shuffle.setAttribute("aria-pressed", String(m.shuffle));
+  shuffle.title = m.shuffle ? "Shuffle: on" : "Shuffle: off";
+  shuffle.setAttribute("aria-label", shuffle.title);
+  const repeat = $("repeat-btn");
+  repeat.dataset.repeat = m.repeat;
+  repeat.setAttribute("aria-pressed", String(m.repeat !== "off"));
+  repeat.title = REPEAT_LABEL[m.repeat];
+  repeat.setAttribute("aria-label", repeat.title);
+  renderSleep();
+}
+
+function renderSleep() {
+  const { until, endOfSong } = modes.sleep;
+  const left = until ? Math.max(1, Math.ceil((until - Date.now()) / 60000)) : 0;
+  const on = endOfSong || left > 0;
+  const btn = $("sleep-btn");
+  btn.setAttribute("aria-pressed", String(on));
+  btn.title = endOfSong
+    ? "Sleep timer: pauses after this song"
+    : left
+      ? `Sleep timer: pauses in ${left} min`
+      : "Sleep timer";
+  btn.setAttribute("aria-label", btn.title);
+  $("sleep-badge").hidden = !on;
+  $("sleep-badge").textContent = endOfSong ? "end" : String(left);
+  $("sleep-menu")
+    .querySelectorAll("button")
+    .forEach((b) => {
+      const checked = !on
+        ? b.dataset.minutes === "0"
+        : endOfSong
+          ? !!b.dataset.end
+          : Number(b.dataset.minutes) === modes.sleep.minutes;
+      b.setAttribute("aria-checked", String(checked));
+    });
+}
+setInterval(() => modes.sleep.until && renderSleep(), 20000);
+
+$("shuffle-btn").addEventListener("click", async () => {
+  const res = await sw({ type: "SET_MODES", shuffle: !modes.shuffle });
+  if (res?.ok) renderModes(res.modes);
+});
+$("repeat-btn").addEventListener("click", async () => {
+  const res = await sw({ type: "SET_MODES", repeat: REPEAT_NEXT[modes.repeat] });
+  if (res?.ok) renderModes(res.modes);
+});
+
+function toggleSleepMenu(open) {
+  $("sleep-menu").hidden = !open;
+  $("sleep-btn").setAttribute("aria-expanded", String(open));
+  if (open) ($("sleep-menu").querySelector('[aria-checked="true"]') || $("sleep-menu").querySelector("button")).focus();
+}
+$("sleep-btn").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleSleepMenu($("sleep-menu").hidden);
+});
+$("sleep-menu").addEventListener("click", async (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  toggleSleepMenu(false);
+  const res = await sw({ type: "SET_SLEEP", minutes: Number(b.dataset.minutes) || 0, endOfSong: !!b.dataset.end });
+  if (res?.ok) renderModes(res.modes);
+  $("sleep-btn").focus();
+});
+$("sleep-menu").addEventListener("keydown", (e) => {
+  const items = [...$("sleep-menu").querySelectorAll("button")];
+  const i = items.indexOf(document.activeElement);
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    items[(i + (e.key === "ArrowDown" ? 1 : items.length - 1)) % items.length].focus();
+  } else if (e.key === "Escape") {
+    e.preventDefault();
+    toggleSleepMenu(false);
+    $("sleep-btn").focus();
+  }
+});
+document.addEventListener("click", (e) => {
+  if (!$("sleep-menu").hidden && !e.target.closest(".sleep")) toggleSleepMenu(false);
+});
 
 // Firefox only: autoplay is allowed from a regular tab (see autoplay.html).
 $("autoplay-btn").addEventListener("click", () => {
@@ -617,12 +835,7 @@ async function maybeLoadSuggestions() {
     return;
   }
   res.items.forEach((t) => {
-    el.appendChild(
-      makeRow(t, {
-        onPlay: () => sw({ type: "PLAY_TRACK", track: t }),
-        action: { icon: "add", label: "Add to queue", onClick: () => sw({ type: "ENQUEUE", track: t }) },
-      })
-    );
+    el.appendChild(makeRow(t, { onPlay: () => sw({ type: "PLAY_TRACK", track: t }), actions: songActions(t) }));
   });
 }
 
@@ -632,6 +845,10 @@ let lyricsLang = null; // "ja" | "ko" | null, for romanization
 let romanizeOn = false;
 let parsedLyrics = []; // { time, text }
 let lastActiveIdx = -1;
+// Timing adjustment per song, in seconds: positive shows lines later (for
+// LRCLIB lyrics that run a bit early), negative earlier. Remembered per song.
+let lyricOffset = 0;
+const MAX_OFFSETS = 300;
 
 async function maybeLoadLyrics() {
   const track = currentTrack();
@@ -640,6 +857,7 @@ async function maybeLoadLyrics() {
   lyricsKey = key;
   parsedLyrics = [];
   lastActiveIdx = -1;
+  lyricOffset = 0;
   lyricsLang = null;
   $("lyrics-head").hidden = true;
   const container = $("lyrics-container");
@@ -707,10 +925,41 @@ chrome.storage.local.get({ romanize: false }).then(({ romanize }) => {
 function setupRomanization() {
   const texts = [...document.querySelectorAll("#lyrics-container .lyric-text")].map((el) => el.textContent);
   lyricsLang = Romanize.detect(texts.join("\n"));
-  $("lyrics-head").hidden = !lyricsLang;
+  $("romanize-btn").hidden = !lyricsLang;
   $("romanize-note").textContent = lyricsLang === "ja" ? "Japanese lyrics" : lyricsLang === "ko" ? "Korean lyrics" : "";
+  $("lyric-offset").hidden = !parsedLyrics.length;
+  $("lyrics-head").hidden = !lyricsLang && !parsedLyrics.length;
+  loadLyricOffset();
   applyRomanization();
 }
+
+async function loadLyricOffset() {
+  const key = lyricsKey;
+  const { lyricOffsets } = await chrome.storage.local.get({ lyricOffsets: {} });
+  if (key !== lyricsKey) return;
+  lyricOffset = lyricOffsets[key] || 0;
+  renderLyricOffset();
+}
+
+function renderLyricOffset() {
+  $("offset-value").textContent = `${lyricOffset > 0 ? "+" : ""}${lyricOffset.toFixed(1)}s`;
+  lastActiveIdx = -1;
+  if (state.status) highlightLyric(state.status.time);
+}
+
+async function changeLyricOffset(delta) {
+  const key = lyricsKey;
+  lyricOffset = Math.round((lyricOffset + delta) * 10) / 10;
+  renderLyricOffset();
+  const { lyricOffsets } = await chrome.storage.local.get({ lyricOffsets: {} });
+  delete lyricOffsets[key];
+  if (lyricOffset) lyricOffsets[key] = lyricOffset;
+  const entries = Object.entries(lyricOffsets).slice(-MAX_OFFSETS); // newest last
+  await chrome.storage.local.set({ lyricOffsets: Object.fromEntries(entries) });
+}
+
+$("offset-minus").addEventListener("click", () => changeLyricOffset(-0.5));
+$("offset-plus").addEventListener("click", () => changeLyricOffset(0.5));
 
 async function applyRomanization() {
   const container = $("lyrics-container");
@@ -766,9 +1015,10 @@ function scrollActiveLyric() {
 
 function highlightLyric(currentTime) {
   if (!parsedLyrics.length) return;
+  const t = currentTime - lyricOffset;
   let activeIdx = -1;
   for (let i = 0; i < parsedLyrics.length; i++) {
-    if (parsedLyrics[i].time <= currentTime) activeIdx = i;
+    if (parsedLyrics[i].time <= t) activeIdx = i;
     else break;
   }
   if (activeIdx === lastActiveIdx) return;
@@ -790,12 +1040,14 @@ $("api-key-form").addEventListener("submit", async (e) => {
 (async () => {
   const { apiKey } = await chrome.storage.local.get({ apiKey: "" });
   $("api-key-input").value = apiKey;
-  showTab("queue");
+  const startTab = new URLSearchParams(location.search).get("tab");
+  showTab(startTab === "playlists" ? "playlists" : "queue");
   const res = await sw({ type: "GET_STATE" });
   if (res?.ok) {
     if (res.volume > 0) restoreVolume = res.volume;
     renderVolume(res.volume);
     state = { queue: res.queue, index: res.index, status: res.status };
+    if (res.modes) renderModes(res.modes);
     render();
   } else {
     render();

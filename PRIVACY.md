@@ -1,6 +1,6 @@
 # Privacy Policy
 
-_Last updated: 2026-11-14_
+_Last updated: 2026-11-16_
 
 PocketBeat is a browser extension that runs entirely in your browser. It has no servers of its own, no
 analytics, no tracking, and no user accounts. The author of PocketBeat receives no data from you.
@@ -12,12 +12,14 @@ Stored with `chrome.storage` in your browser profile, and never sent to the auth
 - your queue and the position in it
 - the playlists you save (their names and songs)
 - your play history (the last 300 song IDs, used so suggestions don't repeat songs)
+- the last 50 songs you played, with their titles, for the Recently played list
 - cached Up next suggestions (kept for 6 hours)
-- your volume setting and whether romanized lyrics are on
+- your settings: volume, shuffle, repeat, the sleep timer, whether romanized lyrics are on, and lyrics
+  timing adjustments for songs where you changed them
 - your YouTube Data API key, if you choose to add one
 
 Removing the extension deletes all of it. Clearing the queue in the popup removes the queue, and deleting a
-playlist removes it.
+playlist removes it. Exporting playlists saves a file only where you choose; PocketBeat sends it nowhere.
 
 ## Data sent to third parties
 
@@ -41,6 +43,7 @@ player.
 |------------|-----|
 | `storage` | Save your queue, playlists, history, settings, and optional API key locally |
 | `offscreen` | Keep a hidden player page alive so music plays after the popup closes |
+| `alarms` | Run the sleep timer, even if the browser pauses the extension in the meantime |
 | `declarativeNetRequestWithHostAccess` | Add the request headers YouTube requires for embeds and search, only on requests made by PocketBeat |
 | Host access to `music.youtube.com`, `www.youtube.com`, `lrclib.net`, `www.googleapis.com` | Reach the services listed above. PocketBeat does not read or change the pages you visit. |
 

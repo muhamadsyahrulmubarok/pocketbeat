@@ -44,6 +44,9 @@
 
     <div class="controls">
       <div class="transport">
+        <button id="shuffle-btn" class="icon-btn small mode-btn" type="button" title="Shuffle" aria-label="Shuffle" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17 1.42-1.41ZM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5Zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13Z"/></svg>
+        </button>
         <button id="prev-btn" class="icon-btn" type="button" title="Previous" aria-label="Previous">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6V5Zm3.5 7L19 5v14l-9.5-7Z"/></svg>
         </button>
@@ -54,8 +57,25 @@
         <button id="next-btn" class="icon-btn" type="button" title="Next" aria-label="Next">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2V5ZM5 5l9.5 7L5 19V5Z"/></svg>
         </button>
+        <button id="repeat-btn" class="icon-btn small mode-btn" type="button" title="Repeat: off" aria-label="Repeat: off" aria-pressed="false" data-repeat="off">
+          <svg class="i-repeat" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7Zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4Z"/></svg>
+          <svg class="i-repeat-one" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7Zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4Zm-4-2V9h-1l-2 1v1h1.5v4H13Z"/></svg>
+        </button>
       </div>
       <div class="volume">
+        <div class="sleep">
+          <button id="sleep-btn" class="icon-btn small mode-btn" type="button" title="Sleep timer" aria-label="Sleep timer" aria-haspopup="menu" aria-expanded="false" aria-pressed="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.34 2.02C6.59 1.82 2 6.42 2 12c0 5.52 4.48 10 10 10 3.71 0 6.93-2.02 8.66-5.02-7.51-.25-12.09-8.43-8.32-14.96Z"/></svg>
+            <span id="sleep-badge" class="badge" hidden></span>
+          </button>
+          <div id="sleep-menu" class="menu" role="menu" aria-label="Sleep timer" hidden>
+            <button type="button" role="menuitemradio" aria-checked="true" data-minutes="0">Off</button>
+            <button type="button" role="menuitemradio" aria-checked="false" data-minutes="15">15 minutes</button>
+            <button type="button" role="menuitemradio" aria-checked="false" data-minutes="30">30 minutes</button>
+            <button type="button" role="menuitemradio" aria-checked="false" data-minutes="60">1 hour</button>
+            <button type="button" role="menuitemradio" aria-checked="false" data-end="1">End of song</button>
+          </div>
+        </div>
         <button id="mute-btn" class="icon-btn small" type="button" title="Mute" aria-label="Mute">
           <svg class="i-vol" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Zm12.5 3a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4Z"/></svg>
           <svg class="i-mute" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4V9Zm11.3.3 1.4-1.4L19 10.2l2.3-2.3 1.4 1.4-2.3 2.3 2.3 2.3-1.4 1.4-2.3-2.3-2.3 2.3-1.4-1.4 2.3-2.3-2.3-2.3Z"/></svg>
@@ -79,6 +99,8 @@
       <div class="panel-head">
         <div class="seg" role="radiogroup" aria-label="Search for">
           <button class="seg-btn" type="button" role="radio" aria-checked="true" data-kind="songs">Songs</button>
+          <button class="seg-btn" type="button" role="radio" aria-checked="false" data-kind="albums">Albums</button>
+          <button class="seg-btn" type="button" role="radio" aria-checked="false" data-kind="artists">Artists</button>
           <button class="seg-btn" type="button" role="radio" aria-checked="false" data-kind="playlists">Playlists</button>
         </div>
       </div>
@@ -87,7 +109,7 @@
 
     <section class="panel" data-panel="queue" role="tabpanel" aria-labelledby="tab-queue" hidden>
       <div class="panel-head">
-        <span class="panel-note">Click a song to play it</span>
+        <span class="panel-note">Click to play, drag to reorder</span>
         <span class="panel-actions">
           <button id="save-queue-btn" class="text-btn" type="button">Save as playlist</button>
           <button id="clear-queue-btn" class="text-btn" type="button">Clear</button>
@@ -103,9 +125,16 @@
 
     <section class="panel" data-panel="playlists" role="tabpanel" aria-labelledby="tab-playlists" hidden>
       <div class="panel-head">
-        <span class="panel-note">Saved in this browser. Playing one replaces the queue.</span>
+        <span class="panel-note">Saved in this browser</span>
+        <span class="panel-actions">
+          <button id="export-btn" class="text-btn" type="button">Export</button>
+          <button id="import-btn" class="text-btn" type="button">Import</button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden />
+        </span>
       </div>
       <ul id="playlist-list" class="list"></ul>
+      <h3 class="section-title">Recently played</h3>
+      <ul id="recent-list" class="list"></ul>
     </section>
 
     <section class="panel" data-panel="suggest" role="tabpanel" aria-labelledby="tab-suggest" hidden>
@@ -117,8 +146,13 @@
 
     <section class="panel" data-panel="lyrics" role="tabpanel" aria-labelledby="tab-lyrics" hidden>
       <div id="lyrics-head" class="panel-head" hidden>
+        <span id="lyric-offset" class="lyric-offset" hidden>
+          <button id="offset-minus" class="text-btn" type="button" title="Lyrics earlier" aria-label="Show lyrics 0.5 seconds earlier">−0.5s</button>
+          <span id="offset-value" class="panel-note" aria-live="polite" title="Lyrics timing">0.0s</span>
+          <button id="offset-plus" class="text-btn" type="button" title="Lyrics later" aria-label="Show lyrics 0.5 seconds later">+0.5s</button>
+        </span>
         <span id="romanize-note" class="panel-note"></span>
-        <button id="romanize-btn" class="seg-btn chip" type="button" aria-pressed="false">Romanized</button>
+        <button id="romanize-btn" class="seg-btn chip" type="button" aria-pressed="false" hidden>Romanized</button>
       </div>
       <div id="lyrics-container" class="lyrics">Play a song to see its lyrics.</div>
       <p class="attribution">Lyrics from <a href="https://lrclib.net" target="_blank" rel="noopener">LRCLIB</a></p>

@@ -16,12 +16,23 @@ opening a YouTube Music tab and without an API key.
 - **Search suggestions as you type.** Up to 4 suggestions from YouTube Music. Use ↓/↑ to pick one, →
   to put it in the search box and keep typing, Enter to search, Esc to close.
 - **Plays in the background.** Music keeps playing after you close the popup. No tab is opened.
-- **Queue.** Play now, add to queue, remove, clear.
-- **Playlists.** Save your queue as a playlist, or search YouTube Music playlists (Results → Playlists) to
-  play one or save it. Saved playlists stay in your browser.
+- **Queue.** Play now, play next, add to queue, remove, clear. Drag songs to reorder them (or Alt+↑/↓).
+- **Shuffle and repeat.** Shuffle plays every song in the queue once before repeating any; repeat the whole
+  queue or just the current song.
+- **Sleep timer.** Pause after 15, 30, or 60 minutes, or at the end of the current song.
+- **Keyboard shortcuts.** Play/pause, next, and previous without opening the popup:
+  Alt+Shift+Space, Alt+Shift+. (period), and Alt+Shift+, (comma). Change them at
+  `chrome://extensions/shortcuts` (or Manage Extension Shortcuts in Firefox's add-ons page). Hover the
+  toolbar icon to see the current song.
+- **Albums, artists, and playlists.** Search YouTube Music albums, EPs, singles, artists, and playlists
+  (Results → Albums, Artists, or Playlists) to play one or save it; an artist plays their top songs. You
+  can also save your queue as a playlist. Saved playlists stay in your browser, and can be exported to a
+  file and imported again (as a backup, or to move them to another browser).
+- **Recently played.** The last 50 songs, in the Playlists tab.
 - **Up next.** Suggestions come from the YouTube Music radio for the current song. When the queue ends,
   PocketBeat keeps playing from that radio, the same way YouTube Music does.
-- **Synced lyrics** from [LRCLIB](https://lrclib.net), highlighted line by line.
+- **Synced lyrics** from [LRCLIB](https://lrclib.net), highlighted line by line. If a song's lyrics run a
+  little early or late, shift them in 0.5 second steps; PocketBeat remembers it for that song.
 - **Romanized lyrics (optional).** For Korean and Japanese songs, turn on **Romanized** in the Lyrics tab to
   see each line in Latin letters, so you can sing along. Off by default, and it works offline: Korean is
   converted by rules, Japanese with a built-in reading dictionary of about 130 KB. Japanese kanji with
